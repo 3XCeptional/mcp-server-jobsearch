@@ -12,6 +12,33 @@ from urllib.parse import parse_qs, urlparse
 
 _BARE_ID_RE = re.compile(r"^[A-Za-z0-9]+$")
 
+# Real Indeed country subdomains this server is known to talk to. Kept
+# deliberately small and honest rather than guessing at every country Indeed
+# operates in - add to this list only when a new domain is actually wired
+# through, not speculatively.
+_ALLOWED_DOMAINS = frozenset({
+    "indeed.com",
+    "www.indeed.com",
+    "au.indeed.com",
+    "uk.indeed.com",
+    "ca.indeed.com",
+    "nz.indeed.com",
+})
+
+
+def _validate_domain(domain: str) -> str:
+    """Reject any domain not in the known-Indeed allowlist.
+
+    Defense-in-depth: no MCP tool currently exposes `domain` as a parameter,
+    so this isn't reachable today, but it guards against a future
+    contributor wiring `domain` through to a tool without realizing it would
+    let a caller point this server's browser (and any autofilled candidate
+    PII) at an arbitrary attacker-controlled URL.
+    """
+    if domain not in _ALLOWED_DOMAINS:
+        raise ValueError(f"domain {domain!r} is not an allowed Indeed domain")
+    return domain
+
 
 def normalize_job_id(raw: str) -> str:
     """Extract Indeed's job id (the `jk` query param) from various inputs.
@@ -62,4 +89,5 @@ def job_view_url(job_id: str, domain: str = "au.indeed.com") -> str:
         raise ValueError("job_id must not be empty")
     if not domain or not domain.strip():
         raise ValueError("domain must not be empty")
+    _validate_domain(domain)
     return f"https://{domain}/viewjob?jk={job_id}"

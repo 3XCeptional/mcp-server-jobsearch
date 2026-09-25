@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
+from indeed_mcp_server.identifiers import _validate_domain
+
 # Indeed's real query param for job type is `jt`.
 JOB_TYPE_MAP: dict[str, str] = {
     "internship": "internship",
@@ -57,6 +59,7 @@ def build_job_search_url(
         raise ValueError("keywords must be a non-empty string")
     if not domain or not domain.strip():
         raise ValueError("domain must not be empty")
+    _validate_domain(domain)
 
     params: dict[str, str] = {"q": keywords}
 

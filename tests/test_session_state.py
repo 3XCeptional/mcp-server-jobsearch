@@ -34,6 +34,13 @@ class _FakeContext:
         self.close = AsyncMock()
 
 
+class _FakePlaywright:
+    """Stand-in for the `playwright` driver-manager handle."""
+
+    def __init__(self) -> None:
+        self.stop = AsyncMock()
+
+
 def _run(coro):
     return asyncio.run(coro)
 
@@ -41,7 +48,8 @@ def _run(coro):
 def test_get_or_create_session_reuses_same_session(tmp_path: Path) -> None:
     page = _FakePage()
     context = _FakeContext(page)
-    fake_launch = AsyncMock(return_value=(context, page))
+    playwright = _FakePlaywright()
+    fake_launch = AsyncMock(return_value=(playwright, context, page))
 
     with (
         patch(
@@ -71,10 +79,27 @@ def test_close_is_safe_when_no_session_created(tmp_path: Path) -> None:
     _run(manager.close())
 
 
+def test_close_does_not_stop_playwright_when_no_session_created(tmp_path: Path) -> None:
+    """close() must be a no-op on `playwright` too if nothing was ever launched."""
+    playwright = _FakePlaywright()
+    fake_launch = AsyncMock(return_value=(playwright, _FakeContext(_FakePage()), _FakePage()))
+
+    with patch(
+        "indeed_mcp_server.session_state.launch_persistent_browser",
+        fake_launch,
+    ):
+        manager = SessionManager(user_data_dir=tmp_path)
+        _run(manager.close())
+
+    fake_launch.assert_not_awaited()
+    playwright.stop.assert_not_awaited()
+
+
 def test_close_calls_underlying_context_close(tmp_path: Path) -> None:
     page = _FakePage()
     context = _FakeContext(page)
-    fake_launch = AsyncMock(return_value=(context, page))
+    playwright = _FakePlaywright()
+    fake_launch = AsyncMock(return_value=(playwright, context, page))
 
     with (
         patch(
@@ -91,6 +116,9 @@ def test_close_calls_underlying_context_close(tmp_path: Path) -> None:
         _run(manager.close())
 
     context.close.assert_awaited_once()
+    playwright.stop.assert_awaited_once()
 
-    # A second close() after the context is already gone must still be safe.
+    # A second close() after the context/playwright are already gone must
+    # still be safe, and must not call stop() a second time.
     _run(manager.close())
+    playwright.stop.assert_awaited_once()

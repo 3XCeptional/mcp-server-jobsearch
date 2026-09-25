@@ -20,6 +20,7 @@ except ModuleNotFoundError:
 
 from indeed_mcp_server.contracts import ApplicantProfile
 from indeed_mcp_server.extractor import IndeedExtractor
+from indeed_mcp_server.identifiers import normalize_job_id
 from indeed_mcp_server.session_state import SessionManager
 
 # Constructed eagerly at import time, but cheap: `SessionManager.__init__` and
@@ -61,6 +62,7 @@ def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
     @mcp.tool(name="get_job_details")
     async def get_job_details(job_id: str) -> dict:
         """Fetch full detail (description, salary, job type) for one job id."""
+        job_id = normalize_job_id(job_id)
         return await extractor.get_job_details(job_id)
 
     @mcp.tool(name="apply_to_job")
@@ -88,6 +90,7 @@ def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
         tool parameters must be flat JSON-primitive types rather than a
         nested dict.
         """
+        job_id = normalize_job_id(job_id)
         screening_answers = json.loads(screening_answers_json) if screening_answers_json else {}
         profile = ApplicantProfile(
             full_name=full_name,

@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import asyncio
 
-from indeed_mcp_server.server import mcp
+import pytest
+
+from indeed_mcp_server.server import extractor, mcp
 
 EXPECTED_TOOL_NAMES = {"search_jobs", "get_job_details", "apply_to_job", "close_session"}
 
@@ -71,3 +73,102 @@ def test_tool_descriptions_are_non_empty():
     for tool in _list_tools():
         assert tool.description
         assert tool.description.strip() != ""
+
+
+class TestJobIdNormalizedAtToolBoundary:
+    """`get_job_details`/`apply_to_job` must run the raw `job_id` through
+    `normalize_job_id()` before it ever reaches the extractor, so a
+    path-traversal-shaped or URL-shaped id can never leak downstream
+    unvalidated. Verified by monkeypatching the extractor to record what it
+    was actually called with, and asserting a malformed id fails loudly
+    rather than being swallowed into a fabricated result.
+    """
+
+    def test_get_job_details_normalizes_before_calling_extractor(self, monkeypatch):
+        received = {}
+
+        async def fake_get_job_details(job_id):
+            received["job_id"] = job_id
+            return {"job_id": job_id}
+
+        monkeypatch.setattr(extractor, "get_job_details", fake_get_job_details)
+
+        asyncio.run(
+            mcp.call_tool(
+                "get_job_details",
+                {"job_id": "https://au.indeed.com/viewjob?jk=abc123def456&tk=xyz"},
+            )
+        )
+        assert received["job_id"] == "abc123def456"
+
+    def test_get_job_details_rejects_malformed_job_id_without_calling_extractor(
+        self, monkeypatch
+    ):
+        called = False
+
+        async def fake_get_job_details(job_id):
+            nonlocal called
+            called = True
+            return {"job_id": job_id}
+
+        monkeypatch.setattr(extractor, "get_job_details", fake_get_job_details)
+
+        with pytest.raises(Exception):
+            asyncio.run(
+                mcp.call_tool("get_job_details", {"job_id": "../../etc/passwd"})
+            )
+        assert called is False
+
+    def test_apply_to_job_normalizes_before_calling_extractor(self, monkeypatch):
+        received = {}
+
+        async def fake_apply_to_job(job_id, profile):
+            received["job_id"] = job_id
+            from indeed_mcp_server.contracts import ApplyResult
+
+            return ApplyResult(job_id=job_id, submitted=True)
+
+        monkeypatch.setattr(extractor, "apply_to_job", fake_apply_to_job)
+
+        asyncio.run(
+            mcp.call_tool(
+                "apply_to_job",
+                {
+                    "job_id": "https://au.indeed.com/viewjob?jk=zzz999&tk=abc",
+                    "full_name": "Test Candidate",
+                    "email": "test@example.com",
+                    "phone": "0400000000",
+                    "resume_path": "/tmp/resume.pdf",
+                },
+            )
+        )
+        assert received["job_id"] == "zzz999"
+
+    def test_apply_to_job_rejects_malformed_job_id_without_calling_extractor(
+        self, monkeypatch
+    ):
+        called = False
+
+        async def fake_apply_to_job(job_id, profile):
+            nonlocal called
+            called = True
+            from indeed_mcp_server.contracts import ApplyResult
+
+            return ApplyResult(job_id=job_id, submitted=True)
+
+        monkeypatch.setattr(extractor, "apply_to_job", fake_apply_to_job)
+
+        with pytest.raises(Exception):
+            asyncio.run(
+                mcp.call_tool(
+                    "apply_to_job",
+                    {
+                        "job_id": "not a valid id!!",
+                        "full_name": "Test Candidate",
+                        "email": "test@example.com",
+                        "phone": "0400000000",
+                        "resume_path": "/tmp/resume.pdf",
+                    },
+                )
+            )
+        assert called is False

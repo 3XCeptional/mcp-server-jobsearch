@@ -72,6 +72,10 @@ class TestJobViewUrl:
         with pytest.raises(ValueError):
             job_view_url("abc123def456", domain="")
 
+    def test_unlisted_domain_raises(self):
+        with pytest.raises(ValueError):
+            job_view_url("abc123def456", domain="evil.example.com")
+
     def test_roundtrip_with_normalize_job_id(self):
         from indeed_mcp_server.identifiers import normalize_job_id
 

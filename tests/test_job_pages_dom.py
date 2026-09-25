@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from indeed_mcp_server.contracts import ExtractionError, JobDetail
-from indeed_mcp_server.job_pages import parse_job_detail_from_page
+from indeed_mcp_server.job_pages import parse_job_detail_from_page, parse_search_results_from_page
 
 _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "indeed_job_detail_sample.html"
 _FIXTURE_URL = "https://example.test/viewjob?jk=abc123"
@@ -74,3 +74,76 @@ def test_missing_description_raises_extraction_error(html_page_runner):
     html = "<html><body><h1>Security Analyst</h1></body></html>"
     with pytest.raises(ExtractionError):
         _parse(html_page_runner, html)
+
+
+# --- parse_search_results_from_page -----------------------------------------
+#
+# No fixture file existed for the search-results page before this change, so
+# these use small hand-built inline HTML snippets, matching the convention
+# already used above for the missing-title/description edge cases.
+
+_SEARCH_RESULT_CARD_HTML = """
+<html><body>
+  <div class="job_seen_beacon">
+    <h2 class="jobTitle"><a data-jk="xyz789" href="/rc/clk?jk=xyz789">Security Engineer</a></h2>
+    <span data-testid="company-name">Acme Corp</span>
+    <div data-testid="text-location">Sydney NSW</div>
+    <div data-testid="jobsnippet_footer">Great opportunity for a security engineer.</div>
+    <span data-testid="myJobsStateDate">Posted 3 days ago</span>
+  </div>
+</body></html>
+"""
+
+_SEARCH_RESULT_UNPARSEABLE_CARD_HTML = """
+<html><body>
+  <div class="job_seen_beacon">
+    <span>A card container with none of the expected title/link markup.</span>
+  </div>
+</body></html>
+"""
+
+_SEARCH_RESULT_BOT_CHECK_HTML = """
+<html><body>
+  <p>Please verify you are a human before continuing.</p>
+</body></html>
+"""
+
+
+def test_parses_a_normal_search_result_card(html_page_runner):
+    results = html_page_runner(
+        _SEARCH_RESULT_CARD_HTML, lambda page: parse_search_results_from_page(page)
+    )
+    assert len(results) == 1
+    summary = results[0]
+    assert summary.job_id == "xyz789"
+    assert summary.title == "Security Engineer"
+    assert summary.company == "Acme Corp"
+    assert summary.location == "Sydney NSW"
+
+
+def test_containers_found_but_zero_parseable_cards_returns_empty_list(html_page_runner):
+    """A real card container that fails to yield a job id/title is skipped,
+
+    not raised - this is the "some cards malformed" case, distinct from
+    "no card containers matched at all" below. It legitimately returns []
+    when every found container fails to parse.
+    """
+    results = html_page_runner(
+        _SEARCH_RESULT_UNPARSEABLE_CARD_HTML,
+        lambda page: parse_search_results_from_page(page),
+    )
+    assert results == []
+
+
+def test_no_result_containers_at_all_raises_extraction_error(html_page_runner):
+    """A page where NONE of `_RESULT_CARD_SELECTORS` match anything (e.g. a
+
+    bot-check/login wall handed to this parser by best-effort auth) must
+    surface as a failure, not silently look like a genuine zero-results
+    search.
+    """
+    with pytest.raises(ExtractionError):
+        html_page_runner(
+            _SEARCH_RESULT_BOT_CHECK_HTML,
+            lambda page: parse_search_results_from_page(page),
+        )

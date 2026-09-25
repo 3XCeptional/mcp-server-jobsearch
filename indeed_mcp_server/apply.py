@@ -88,6 +88,20 @@ _SUBMIT_BUTTON_SELECTORS = (
 # or reported as an unanswered required field.
 _STANDARD_FIELD_NAMES = {"applicant.name", "applicant.email", "applicant.phoneNumber"}
 
+# Attachment-upload safety limits: `resume_path`/`cover_letter_path` are
+# caller-supplied and go straight to Playwright's `set_input_files()`, which
+# reads and uploads whatever bytes live at that path to a real third-party
+# employer's form. These bound what can be uploaded to something that looks
+# like an actual resume/cover letter.
+_ALLOWED_ATTACHMENT_SUFFIXES = frozenset({".pdf", ".doc", ".docx", ".txt", ".rtf"})
+_MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024  # 10 MB
+
+# Truthy-shaped answer strings that mean "check this checkbox". Anything
+# else (including an explicit "no") leaves it unchecked - the previous
+# behavior of unconditionally calling `.check()` ignored the answer
+# entirely.
+_CHECKBOX_TRUTHY_ANSWERS = frozenset({"yes", "true", "1", "y", "on", "agree", "i agree"})
+
 _SUCCESS_TEXT_MARKERS = (
     "application submitted",
     "your application has been submitted",
@@ -151,6 +165,64 @@ async def _upload_first(root: Any, selectors: tuple[str, ...], path: str) -> boo
     return True
 
 
+def _sensitive_attachment_directories() -> tuple[Path, ...]:
+    """Directories a resume/cover-letter path must never resolve under.
+
+    Defense-in-depth against exactly the credential-exfiltration scenario an
+    injected/malicious `resume_path` enables: uploading the bytes of an SSH
+    key, AWS credentials, a GPG keyring, or an OS credential store to a
+    real third-party employer's form as a "resume".
+    """
+    home = Path.home()
+    return (
+        home / ".ssh",
+        home / ".aws",
+        home / ".gnupg",
+        Path("/etc"),
+        home / "Library" / "Keychains",
+    )
+
+
+def _validate_attachment_path(path: str, *, kind: str) -> str:
+    """Resolve and validate a caller-supplied attachment path before upload.
+
+    Raises `ExtractionError` (never uploads) unless the path resolves to an
+    existing regular file, with a document-shaped extension, under the
+    10 MB size cap, and outside every directory in
+    `_sensitive_attachment_directories()`. Returns the resolved, absolute
+    path string to actually hand to Playwright.
+    """
+    resolved = Path(path).expanduser().resolve()
+
+    if not resolved.is_file():
+        raise ExtractionError(
+            f"{kind} path {path!r} does not resolve to an existing file "
+            f"(resolved: {resolved})"
+        )
+
+    if resolved.suffix.lower() not in _ALLOWED_ATTACHMENT_SUFFIXES:
+        raise ExtractionError(
+            f"{kind} path {path!r} has an unsupported extension {resolved.suffix!r} "
+            f"(allowed: {sorted(_ALLOWED_ATTACHMENT_SUFFIXES)})"
+        )
+
+    size = resolved.stat().st_size
+    if size > _MAX_ATTACHMENT_BYTES:
+        raise ExtractionError(
+            f"{kind} path {path!r} is {size} bytes, over the "
+            f"{_MAX_ATTACHMENT_BYTES}-byte cap"
+        )
+
+    for sensitive_dir in _sensitive_attachment_directories():
+        if resolved.is_relative_to(sensitive_dir):
+            raise ExtractionError(
+                f"{kind} path {path!r} resolves under a sensitive directory "
+                f"({sensitive_dir}) and was refused"
+            )
+
+    return str(resolved)
+
+
 async def _wait_for_apply_form_root(page: Any, timeout_ms: int = 10000) -> Any:
     """Return the apply form's root: the modal iframe if one appears, else the page.
 
@@ -166,6 +238,17 @@ async def _wait_for_apply_form_root(page: Any, timeout_ms: int = 10000) -> Any:
         return page
 
 
+def _is_external_domain(url: str) -> bool:
+    """True if `url`'s host is neither exactly indeed.com nor a subdomain of it.
+
+    A plain `netloc.endswith("indeed.com")` check is fooled by a lookalike
+    host - `"notindeed.com".endswith("indeed.com")` is `True` in Python -
+    so this requires an exact match or a dot-separated subdomain instead.
+    """
+    netloc = urlparse(url).netloc.lower()
+    return not (netloc == "indeed.com" or netloc.endswith(".indeed.com"))
+
+
 async def _click_reveals_external_domain(page: Any, locator: Any, wait_ms: int = 1500) -> bool:
     """Click an "apply on company site" control and check if it left indeed.com.
 
@@ -173,6 +256,10 @@ async def _click_reveals_external_domain(page: Any, locator: Any, wait_ms: int =
     two ways Indeed is known to hand off to an external ATS. If the click
     itself fails outright, the control's mere presence (labeled as an
     external apply link) is treated as sufficient evidence on its own.
+
+    A newly opened off-domain tab is closed before returning: it was only
+    ever needed to inspect its URL, and leaving it open leaks a Playwright
+    Page for the lifetime of the shared browser context.
     """
     context = getattr(page, "context", None)
     pages_before = set(context.pages) if context is not None else set()
@@ -193,8 +280,15 @@ async def _click_reveals_external_domain(page: Any, locator: Any, wait_ms: int =
             except Exception:
                 pass
 
-    netloc = urlparse(getattr(target, "url", "") or "").netloc.lower()
-    return not netloc.endswith("indeed.com")
+    is_external = _is_external_domain(getattr(target, "url", "") or "")
+
+    if is_external and target is not page:
+        try:
+            await target.close()
+        except Exception:  # pragma: no cover - best-effort cleanup
+            pass
+
+    return is_external
 
 
 async def _any_frame_contains_success_text(page: Any) -> bool:
@@ -249,6 +343,15 @@ async def _answer_screening_questions(
 
     answers = profile.screening_answers or {}
 
+    # Tracks how many times each raw (aria-label/name/placeholder) label has
+    # been seen so far in this call. Two genuinely distinct fields that
+    # happen to share the same non-empty `name` (e.g. two differently
+    # purposed inputs both named "phone") would otherwise silently collide
+    # on one answer-lookup key - the `unlabeled_required_field_{index}`
+    # fallback is already unique per field, but that fallback is only
+    # reached when none of aria-label/name/placeholder is set.
+    seen_label_counts: dict[str, int] = {}
+
     for index in range(count):
         field = required.nth(index)
         try:
@@ -270,6 +373,11 @@ async def _answer_screening_questions(
             or f"unlabeled_required_field_{index}"
         )
 
+        occurrence = seen_label_counts.get(label, 0)
+        seen_label_counts[label] = occurrence + 1
+        if occurrence:
+            label = f"{label}_{occurrence + 1}"
+
         answer = answers.get(label)
         if answer is None:
             unanswered.append(label)
@@ -278,8 +386,13 @@ async def _answer_screening_questions(
         try:
             if tag == "select":
                 await field.select_option(label=answer)
-            elif field_type.lower() in ("checkbox", "radio"):
-                await field.check()
+            elif field_type.lower() == "checkbox":
+                if answer.strip().lower() in _CHECKBOX_TRUTHY_ANSWERS:
+                    await field.check()
+                else:
+                    await field.uncheck()
+            elif field_type.lower() == "radio":
+                await _maybe_check_matching_radio(form_root, field, answer)
             else:
                 await field.fill(answer)
         except Exception as exc:
@@ -288,6 +401,34 @@ async def _answer_screening_questions(
             ) from exc
 
     return unanswered
+
+
+async def _maybe_check_matching_radio(form_root: Any, field: Any, answer: str) -> None:
+    """Check `field` only if `answer` names this specific radio option.
+
+    A radio input's `name` groups it with its siblings, but each option in
+    the group is a distinct choice: unconditionally checking every radio
+    the loop visits (the previous behavior) would check every option in
+    every group regardless of what was actually answered. This compares
+    `answer` against the option's own `value` attribute and its associated
+    `<label for="...">` text, and only checks this one field on a match -
+    a non-matching radio is left alone (not an error - a sibling option may
+    match on a later loop iteration).
+    """
+    field_value = (await field.get_attribute("value")) or ""
+    field_label_text = ""
+    field_id = await field.get_attribute("id")
+    if field_id:
+        label_locator = form_root.locator(f'label[for="{field_id}"]')
+        try:
+            if await label_locator.count() > 0:
+                field_label_text = (await label_locator.first.text_content()) or ""
+        except Exception:  # pragma: no cover - defensive against a torn-down frame
+            field_label_text = ""
+
+    candidates = {field_value.strip().lower(), field_label_text.strip().lower()} - {""}
+    if answer.strip().lower() in candidates:
+        await field.check()
 
 
 class JobApplier:
@@ -338,6 +479,16 @@ class JobApplier:
     async def _run_apply_flow(
         self, page: Any, job_id: str, profile: ApplicantProfile
     ) -> ApplyResult:
+        """Fill and submit the apply form on the current form snapshot.
+
+        Scope note: v1 does not detect or advance through a multi-step
+        apply wizard (Indeed's real Apply flow can be multiple pages). If a
+        required core field (name, email, phone, or resume) isn't found on
+        the first form snapshot - whether from page-structure drift or
+        because the field actually lives on a later, un-navigated-to step -
+        this returns `blocked_reason="unsupported_apply_flow"` rather than
+        guessing or reporting a false `submitted=True`.
+        """
         native_locator = await _first_present(page, _NATIVE_APPLY_BUTTON_SELECTORS)
 
         if native_locator is None:
@@ -373,26 +524,63 @@ class JobApplier:
                 job_id=job_id, submitted=False, blocked_reason="account_creation_required"
             )
 
-        await _fill_first(form_root, _NAME_INPUT_SELECTORS, profile.full_name)
-        await _fill_first(form_root, _EMAIL_INPUT_SELECTORS, profile.email)
-        await _fill_first(form_root, _PHONE_INPUT_SELECTORS, profile.phone)
+        name_filled = await _fill_first(form_root, _NAME_INPUT_SELECTORS, profile.full_name)
+        email_filled = await _fill_first(form_root, _EMAIL_INPUT_SELECTORS, profile.email)
+        phone_filled = await _fill_first(form_root, _PHONE_INPUT_SELECTORS, profile.phone)
 
+        resume_path = _validate_attachment_path(profile.resume_path, kind="resume")
         try:
-            await _upload_first(form_root, _RESUME_FILE_INPUT_SELECTORS, profile.resume_path)
+            resume_uploaded = await _upload_first(
+                form_root, _RESUME_FILE_INPUT_SELECTORS, resume_path
+            )
         except Exception as exc:
             raise ExtractionError(
                 f"uploading resume from {profile.resume_path!r} failed: {exc}"
             ) from exc
 
+        # A selector failing to match at all (page-structure drift, or the
+        # field genuinely lives on a later step of a multi-step wizard this
+        # tool doesn't advance through - see `_run_apply_flow`'s docstring)
+        # must stop the flow here, not fall through toward a submit click
+        # that would report a false `submitted=True` with core fields
+        # missing from the form.
+        missing_core_fields = [
+            name
+            for name, filled in (
+                ("full_name", name_filled),
+                ("email", email_filled),
+                ("phone", phone_filled),
+                ("resume", resume_uploaded),
+            )
+            if not filled
+        ]
+        if missing_core_fields:
+            return ApplyResult(
+                job_id=job_id,
+                submitted=False,
+                blocked_reason="unsupported_apply_flow",
+                unanswered_fields=tuple(missing_core_fields),
+            )
+
         if profile.cover_letter_path:
+            cover_letter_path = _validate_attachment_path(
+                profile.cover_letter_path, kind="cover letter"
+            )
             try:
-                await _upload_first(
-                    form_root, _COVER_LETTER_FILE_INPUT_SELECTORS, profile.cover_letter_path
+                cover_letter_uploaded = await _upload_first(
+                    form_root, _COVER_LETTER_FILE_INPUT_SELECTORS, cover_letter_path
                 )
             except Exception as exc:
                 raise ExtractionError(
                     f"uploading cover letter from {profile.cover_letter_path!r} failed: {exc}"
                 ) from exc
+            if not cover_letter_uploaded:
+                return ApplyResult(
+                    job_id=job_id,
+                    submitted=False,
+                    blocked_reason="unsupported_apply_flow",
+                    unanswered_fields=("cover_letter",),
+                )
 
         unanswered = await _answer_screening_questions(form_root, profile)
         if unanswered:

@@ -87,6 +87,10 @@ class TestBuildJobSearchUrl:
         url = build_job_search_url("engineer", domain="www.indeed.com")
         assert url.startswith("https://www.indeed.com/jobs?")
 
+    def test_unlisted_domain_raises(self):
+        with pytest.raises(ValueError):
+            build_job_search_url("engineer", domain="evil.example.com")
+
     def test_empty_keywords_raises(self):
         with pytest.raises(ValueError):
             build_job_search_url("")

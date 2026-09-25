@@ -17,12 +17,18 @@ from playwright.async_api import async_playwright
 
 async def launch_persistent_browser(
     user_data_dir: Path, headless: bool = False
-) -> tuple[Any, Any]:
+) -> tuple[Any, Any, Any]:
     """Launch (or attach to) a persistent Chromium profile.
 
-    Returns (context, page). The profile directory at `user_data_dir` is
-    what makes any manually-completed login survive across runs -- same
-    principle as the reference project, minus its multi-profile complexity.
+    Returns (playwright, context, page). The profile directory at
+    `user_data_dir` is what makes any manually-completed login survive
+    across runs -- same principle as the reference project, minus its
+    multi-profile complexity.
+
+    The caller owns the returned `playwright` driver-manager handle and is
+    responsible for calling `await playwright.stop()` (in addition to
+    `await context.close()`) once done with it -- otherwise the underlying
+    driver process/connection leaks on every relaunch.
     """
     user_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -34,4 +40,4 @@ async def launch_persistent_browser(
         viewport={"width": 1280, "height": 900},
     )
     page = context.pages[0] if context.pages else await context.new_page()
-    return context, page
+    return playwright, context, page

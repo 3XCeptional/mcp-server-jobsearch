@@ -25,6 +25,7 @@ class SessionManager:
 
     def __init__(self, user_data_dir: Path | None = None) -> None:
         self._user_data_dir = user_data_dir or _DEFAULT_USER_DATA_DIR
+        self._playwright: Any = None
         self._context: Any = None
         self._session: ScrapingSession | None = None
 
@@ -32,7 +33,8 @@ class SessionManager:
         if self._session is not None:
             return self._session
 
-        context, page = await launch_persistent_browser(self._user_data_dir)
+        playwright, context, page = await launch_persistent_browser(self._user_data_dir)
+        self._playwright = playwright
         self._context = context
 
         # Best-effort: Indeed's search/detail pages work logged out, so a
@@ -47,4 +49,11 @@ class SessionManager:
         if self._context is not None:
             await self._context.close()
             self._context = None
+        if self._playwright is not None:
+            # Stops the Playwright driver-manager connection itself, not
+            # just the browser context -- without this, every
+            # close()+get_or_create_session() cycle leaks one orphaned
+            # driver process/connection over a long-running process.
+            await self._playwright.stop()
+            self._playwright = None
         self._session = None

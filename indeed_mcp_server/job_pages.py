@@ -148,6 +148,22 @@ async def parse_search_results_from_page(page: "Page") -> list[JobSummary]:
     Cards that don't parse (missing job id, missing title) are skipped
     rather than raising, since one malformed card should not sink an entire
     batch of otherwise-good results. The number skipped is logged.
+
+    Raises:
+        ExtractionError: if literally zero elements match ANY of
+            `_RESULT_CARD_SELECTORS`. This is a total structural mismatch,
+            not a legitimate empty search - `ensure_logged_in` treats a
+            challenge/login wall as best-effort and never blocks session
+            creation, so a Cloudflare interstitial or login page can be
+            handed straight to this parser. Silently returning `[]` in
+            that case would be indistinguishable from a real zero-results
+            search to the caller. NOTE: this module has no independent
+            signal (e.g. Indeed's own "no jobs match your search" markup)
+            to positively confirm a genuine empty search, so a real
+            zero-results page that happens to render none of
+            `_RESULT_CARD_SELECTORS` either will also raise here rather
+            than returning `[]`. That is a known, honest limitation of the
+            current selector list, not an attempt to paper over it.
     """
     cards: "Locator | None" = None
     for selector in _RESULT_CARD_SELECTORS:
@@ -157,8 +173,11 @@ async def parse_search_results_from_page(page: "Page") -> list[JobSummary]:
             break
 
     if cards is None:
-        logger.info("no result cards found on search page (tried %r)", _RESULT_CARD_SELECTORS)
-        return []
+        raise ExtractionError(
+            "no search-result card containers found at all (tried "
+            f"{_RESULT_CARD_SELECTORS!r}) - page may be a bot-check/login "
+            "wall rather than a genuine empty search"
+        )
 
     count = await cards.count()
     results: list[JobSummary] = []
