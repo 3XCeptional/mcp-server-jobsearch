@@ -1,0 +1,58 @@
+[project]
+name = "indeed-mcp-server"
+version = "0.1.0"
+description = "MCP server that gives AI assistants like Claude access to Indeed job search, postings, and listings through the user's own browser session."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Dhiren Bhandare", email = "bhandaredhiren@gmail.com" }
+]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "llm",
+    "anthropic",
+    "claude",
+    "indeed",
+    "job-search",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Internet :: WWW/HTTP :: Dynamic Content",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "mcp>=1.2.0",
+    "playwright>=1.45.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/3xceptional/mcp-server-indeed"
+Repository = "https://github.com/3xceptional/mcp-server-indeed"
+Issues = "https://github.com/3xceptional/mcp-server-indeed/issues"
+
+[project.scripts]
+indeed-mcp-server = "indeed_mcp_server.cli_main:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["indeed_mcp_server*"]
+exclude = ["tests*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]
