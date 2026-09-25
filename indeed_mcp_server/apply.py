@@ -282,7 +282,7 @@ async def _click_reveals_external_domain(page: Any, locator: Any, wait_ms: int =
 
     is_external = _is_external_domain(getattr(target, "url", "") or "")
 
-    if is_external and target is not page:
+    if target is not page:
         try:
             await target.close()
         except Exception:  # pragma: no cover - best-effort cleanup
