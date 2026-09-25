@@ -14,11 +14,9 @@ helper, rather than declaring `async def test_...` functions directly.
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 
 import pytest
-from playwright.async_api import async_playwright
 
 from indeed_mcp_server.contracts import ExtractionError, JobDetail
 from indeed_mcp_server.job_pages import parse_job_detail_from_page
@@ -27,31 +25,24 @@ _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "indeed_job_detail_sample.h
 _FIXTURE_URL = "https://example.test/viewjob?jk=abc123"
 
 
-async def _parse_html(html: str, *, job_id: str = "abc123", url: str = _FIXTURE_URL) -> JobDetail:
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch()
-        try:
-            page = await browser.new_page()
-            await page.set_content(html)
-            return await parse_job_detail_from_page(page, job_id=job_id, url=url)
-        finally:
-            await browser.close()
+def _parse(html_page_runner, html: str, *, job_id: str = "abc123", url: str = _FIXTURE_URL) -> JobDetail:
+    return html_page_runner(html, lambda page: parse_job_detail_from_page(page, job_id=job_id, url=url))
 
 
-def _parse_fixture() -> JobDetail:
+def _parse_fixture(html_page_runner) -> JobDetail:
     html = _FIXTURE_PATH.read_text(encoding="utf-8")
-    return asyncio.run(_parse_html(html))
+    return _parse(html_page_runner, html)
 
 
-def test_extracts_title_company_location():
-    detail = _parse_fixture()
+def test_extracts_title_company_location(html_page_runner):
+    detail = _parse_fixture(html_page_runner)
     assert detail.title == "Security Analyst"
     assert detail.company == "Acme Corp"
     assert detail.location == "Sydney NSW"
 
 
-def test_extracts_and_cleans_description():
-    detail = _parse_fixture()
+def test_extracts_and_cleans_description(html_page_runner):
+    detail = _parse_fixture(html_page_runner)
     assert "looking for a Security Analyst to join our growing team" in detail.description
     assert "SIEM tooling" in detail.description
     # Chrome noise present in the fixture must be stripped by
@@ -61,25 +52,25 @@ def test_extracts_and_cleans_description():
     assert "Report this job" not in detail.description
 
 
-def test_extracts_salary_and_job_type():
-    detail = _parse_fixture()
+def test_extracts_salary_and_job_type(html_page_runner):
+    detail = _parse_fixture(html_page_runner)
     assert detail.salary == "$90,000 - $110,000 a year"
     assert detail.job_type == "Full-time"
 
 
-def test_job_id_and_url_passthrough():
-    detail = _parse_fixture()
+def test_job_id_and_url_passthrough(html_page_runner):
+    detail = _parse_fixture(html_page_runner)
     assert detail.job_id == "abc123"
     assert detail.url == _FIXTURE_URL
 
 
-def test_missing_title_raises_extraction_error():
+def test_missing_title_raises_extraction_error(html_page_runner):
     html = "<html><body><div id='jobDescriptionText'>Some description text.</div></body></html>"
     with pytest.raises(ExtractionError):
-        asyncio.run(_parse_html(html))
+        _parse(html_page_runner, html)
 
 
-def test_missing_description_raises_extraction_error():
+def test_missing_description_raises_extraction_error(html_page_runner):
     html = "<html><body><h1>Security Analyst</h1></body></html>"
     with pytest.raises(ExtractionError):
-        asyncio.run(_parse_html(html))
+        _parse(html_page_runner, html)

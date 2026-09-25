@@ -24,19 +24,17 @@ tests).
 
 No `pytest-asyncio` plugin is installed for this project, so each test
 drives its own event loop with a plain `asyncio.run()` around an async
-helper, rather than declaring `async def test_...` functions directly.
+helper, rather than declaring `async def test_...` functions directly - via
+the shared `html_page_runner` fixture in conftest.py, which owns the
+browser launch/set_content/close boilerplate.
 """
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
 
-from playwright.async_api import async_playwright
-
 from indeed_mcp_server.apply import JobApplier
-from indeed_mcp_server.contracts import ApplicantProfile
 
 _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "indeed_apply_modal_sample.html"
 
@@ -95,30 +93,24 @@ class _FakeNavigator:
         return None
 
 
-async def _run_apply(html: str, profile: ApplicantProfile):
-    async with async_playwright() as playwright:
-        browser = await playwright.chromium.launch()
-        try:
-            page = await browser.new_page()
-            await page.set_content(html)
-            navigator = _FakeNavigator(page)
-            applier = JobApplier(navigator)
-            return await applier.apply_to_job("abc123", profile)
-        finally:
-            await browser.close()
+async def _apply(page: Any, profile) -> Any:
+    navigator = _FakeNavigator(page)
+    applier = JobApplier(navigator)
+    return await applier.apply_to_job("abc123", profile)
 
 
-def test_account_login_wall_blocks_without_creating_account():
-    profile = ApplicantProfile(
-        full_name="Jamie Rivers",
-        email="jamie@example.test",
-        phone="0400000000",
+def _run_apply(html_page_runner, html: str, profile):
+    return html_page_runner(html, lambda page: _apply(page, profile))
+
+
+def test_account_login_wall_blocks_without_creating_account(html_page_runner, make_applicant_profile):
+    profile = make_applicant_profile(
         # Never reached: the login wall must stop the flow before any file
         # upload is attempted, so this path does not need to exist.
         resume_path="/nonexistent/resume.pdf",
     )
 
-    result = asyncio.run(_run_apply(_ACCOUNT_LOGIN_GATE_HTML, profile))
+    result = _run_apply(html_page_runner, _ACCOUNT_LOGIN_GATE_HTML, profile)
 
     assert result.submitted is False
     assert result.blocked_reason == "account_creation_required"
@@ -126,15 +118,8 @@ def test_account_login_wall_blocks_without_creating_account():
     assert result.unanswered_fields == ()
 
 
-def test_normal_form_fills_and_submits(tmp_path):
-    resume_path = tmp_path / "resume.txt"
-    resume_path.write_text("Sample resume content for a fixture-only test.")
-
-    profile = ApplicantProfile(
-        full_name="Jamie Rivers",
-        email="jamie@example.test",
-        phone="0400000000",
-        resume_path=str(resume_path),
+def test_normal_form_fills_and_submits(html_page_runner, make_applicant_profile):
+    profile = make_applicant_profile(
         screening_answers={
             "How did you hear about us?": "Indeed",
             "Notice period (weeks)": "2",
@@ -142,7 +127,7 @@ def test_normal_form_fills_and_submits(tmp_path):
     )
     html = _FIXTURE_PATH.read_text(encoding="utf-8")
 
-    result = asyncio.run(_run_apply(html, profile))
+    result = _run_apply(html_page_runner, html, profile)
 
     assert result.blocked_reason is None
     assert result.unanswered_fields == ()
@@ -151,22 +136,15 @@ def test_normal_form_fills_and_submits(tmp_path):
     assert Path(result.screenshot_path).exists()
 
 
-def test_normal_form_reports_unanswered_required_field_without_submitting(tmp_path):
-    resume_path = tmp_path / "resume.txt"
-    resume_path.write_text("Sample resume content for a fixture-only test.")
-
-    profile = ApplicantProfile(
-        full_name="Jamie Rivers",
-        email="jamie@example.test",
-        phone="0400000000",
-        resume_path=str(resume_path),
+def test_normal_form_reports_unanswered_required_field_without_submitting(html_page_runner, make_applicant_profile):
+    profile = make_applicant_profile(
         # "Notice period (weeks)" is deliberately left unanswered - the tool
         # must flag it, never guess a plausible-sounding default.
         screening_answers={"How did you hear about us?": "Indeed"},
     )
     html = _FIXTURE_PATH.read_text(encoding="utf-8")
 
-    result = asyncio.run(_run_apply(html, profile))
+    result = _run_apply(html_page_runner, html, profile)
 
     assert result.submitted is False
     assert result.blocked_reason == "unsupported_apply_flow"
