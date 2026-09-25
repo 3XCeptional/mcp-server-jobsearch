@@ -50,6 +50,22 @@ class TestNormalizeJobId:
     def test_strips_surrounding_whitespace(self):
         assert normalize_job_id("  abc123def456  ") == "abc123def456"
 
+    def test_path_traversal_shaped_jk_in_url_raises(self):
+        # regression: the URL/fragment branches used to return whatever `jk`
+        # value parse_qs extracted with no shape check, unlike the bare-id
+        # branch - a crafted jk value containing path separators could reach
+        # a filesystem path (apply.py's screenshot filename) unsanitized.
+        with pytest.raises(ValueError):
+            normalize_job_id("https://au.indeed.com/viewjob?jk=abc/../../etc/passwd&tk=xyz")
+
+    def test_path_traversal_shaped_jk_in_fragment_raises(self):
+        with pytest.raises(ValueError):
+            normalize_job_id("jk=abc/../../etc/passwd&tk=xyz")
+
+    def test_jk_with_special_characters_raises(self):
+        with pytest.raises(ValueError):
+            normalize_job_id("https://au.indeed.com/viewjob?jk=abc%00def&tk=xyz")
+
 
 class TestJobViewUrl:
     def test_default_domain(self):

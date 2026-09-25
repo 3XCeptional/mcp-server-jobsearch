@@ -64,17 +64,17 @@ def normalize_job_id(raw: str) -> str:
         parsed = urlparse(candidate)
         query_params = parse_qs(parsed.query)
         jk_values = query_params.get("jk")
-        if jk_values and jk_values[0]:
+        if jk_values and jk_values[0] and _BARE_ID_RE.fullmatch(jk_values[0]):
             return jk_values[0]
-        raise ValueError(f"no 'jk' query parameter found in URL: {raw!r}")
+        raise ValueError(f"no plausible 'jk' query parameter found in URL: {raw!r}")
 
     # Case 2: a bare query fragment containing "jk=".
     if "jk=" in candidate:
         query_params = parse_qs(candidate.lstrip("?"))
         jk_values = query_params.get("jk")
-        if jk_values and jk_values[0]:
+        if jk_values and jk_values[0] and _BARE_ID_RE.fullmatch(jk_values[0]):
             return jk_values[0]
-        raise ValueError(f"no 'jk' query parameter found in fragment: {raw!r}")
+        raise ValueError(f"no plausible 'jk' query parameter found in fragment: {raw!r}")
 
     # Case 3: already a bare id - accept only plausible alphanumeric tokens.
     if _BARE_ID_RE.fullmatch(candidate):
