@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head><title>Security Analyst - Acme Corp | Indeed.com</title></head>
+<body>
+  <h1>Security Analyst</h1>
+
+  <button data-testid="indeedApplyButton" onclick="window.__openIndeedApplyModal()">Apply now</button>
+  <div id="indeed-apply-modal-wrap" style="display:none"></div>
+
+  <script>
+    // Hand-built stand-in for Indeed's native "Indeed Apply" modal: a
+    // dynamically-created iframe (id prefix matches
+    // apply._APPLY_IFRAME_SELECTOR) containing a normal, fully-answerable
+    // application form. No network access, no real Indeed backend - the
+    // submit handler below mutates the iframe's own document with the same
+    // success-text marker apply.py's real (unmodified) confirmation
+    // detection looks for, so that detection logic is exercised end to end
+    // against this fixture rather than stubbed out.
+    window.__openIndeedApplyModal = function () {
+      var wrap = document.getElementById('indeed-apply-modal-wrap');
+      wrap.style.display = 'block';
+
+      var iframe = document.createElement('iframe');
+      iframe.id = 'indeedapply-modal-iframe-1';
+      wrap.appendChild(iframe);
+
+      var doc = iframe.contentDocument;
+      doc.open();
+      doc.write(`
+        <html>
+          <body>
+            <form id="indeed-apply-form">
+              <input type="text" name="applicant.name" placeholder="Full name" />
+              <input type="email" name="applicant.email" placeholder="Email" />
+              <input type="tel" name="applicant.phoneNumber" placeholder="Phone" />
+              <input type="file" name="resume-upload" />
+              <input type="file" name="cover-letter-upload" />
+
+              <label for="hear-about-us">How did you hear about us?</label>
+              <select id="hear-about-us" aria-label="How did you hear about us?" required>
+                <option value="">Select one</option>
+                <option>LinkedIn</option>
+                <option>Indeed</option>
+                <option>Referral</option>
+              </select>
+
+              <label for="notice-period">Notice period (weeks)</label>
+              <input id="notice-period" type="text" aria-label="Notice period (weeks)" required />
+
+              <button type="submit" id="submit-application">Submit your application</button>
+            </form>
+            <script>
+              document.getElementById('indeed-apply-form').addEventListener('submit', function (event) {
+                event.preventDefault();
+                document.body.innerHTML = '<div id="confirmation">Your application has been submitted.</div>';
+              });
+            <\/script>
+          </body>
+        </html>
+      `);
+      doc.close();
+    };
+  </script>
+</body>
+</html>

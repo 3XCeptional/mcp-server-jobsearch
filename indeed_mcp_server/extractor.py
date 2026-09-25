@@ -11,7 +11,8 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from indeed_mcp_server.contracts import JobSummary
+from indeed_mcp_server.apply import JobApplier
+from indeed_mcp_server.contracts import ApplicantProfile, ApplyResult, JobSummary
 from indeed_mcp_server.job_pages import JobPageReader
 from indeed_mcp_server.jobs import JobScraper
 from indeed_mcp_server.navigation import PageNavigator
@@ -51,6 +52,20 @@ class IndeedExtractor:
         scraper = await self._build_scraper()
         detail = await scraper.get_job_details(job_id)
         return asdict(detail)
+
+    async def apply_to_job(self, job_id: str, profile: ApplicantProfile) -> ApplyResult:
+        """Apply to a job through Indeed, filling only what `profile` supplies.
+
+        Mechanical only: never decides whether the candidate should apply,
+        never fact-checks, never invents a field value. See
+        `apply.JobApplier` for the full walk-through and its hard-stop
+        behaviour (CAPTCHA walls, account-creation walls, external ATS
+        handoffs, unanswerable required fields).
+        """
+        session = await self._session_manager.get_or_create_session()
+        navigator = PageNavigator(session)
+        applier = JobApplier(navigator)
+        return await applier.apply_to_job(job_id, profile)
 
     async def close_session(self) -> None:
         """Close the underlying browser session, if one is open."""

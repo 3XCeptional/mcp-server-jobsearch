@@ -10,11 +10,15 @@ linkedin-mcp-server reference project this mirrors) uses.
 
 from __future__ import annotations
 
+import dataclasses
+import json
+
 try:
     from mcp.server.fastmcp import FastMCP
 except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP  # mcp>=2.0
 
+from indeed_mcp_server.contracts import ApplicantProfile
 from indeed_mcp_server.extractor import IndeedExtractor
 from indeed_mcp_server.session_state import SessionManager
 
@@ -29,7 +33,7 @@ mcp = FastMCP("indeed-mcp-server")
 
 
 def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
-    """Register the 3 Indeed job tools on `mcp`, delegating to `extractor`."""
+    """Register the 4 Indeed job tools on `mcp`, delegating to `extractor`."""
 
     @mcp.tool(name="search_jobs")
     async def search_jobs(
@@ -58,6 +62,44 @@ def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
     async def get_job_details(job_id: str) -> dict:
         """Fetch full detail (description, salary, job type) for one job id."""
         return await extractor.get_job_details(job_id)
+
+    @mcp.tool(name="apply_to_job")
+    async def apply_to_job(
+        job_id: str,
+        full_name: str,
+        email: str,
+        phone: str,
+        resume_path: str,
+        location: str = "Sydney, NSW",
+        cover_letter_path: str = "",
+        screening_answers_json: str = "{}",
+    ) -> dict:
+        """Apply to an Indeed job, filling only the fields given here.
+
+        Mechanical only: this tool never decides whether the candidate
+        should apply, never fact-checks, and never invents a field value -
+        the calling agent owns that judgment and supplies every fact via
+        these parameters. It never creates an account, never bypasses a
+        CAPTCHA, and stops (reporting `blocked_reason`) rather than
+        guessing at anything it isn't given.
+
+        `screening_answers_json` is a JSON object string mapping a
+        screening question's field label/name to its answer, since MCP
+        tool parameters must be flat JSON-primitive types rather than a
+        nested dict.
+        """
+        screening_answers = json.loads(screening_answers_json) if screening_answers_json else {}
+        profile = ApplicantProfile(
+            full_name=full_name,
+            email=email,
+            phone=phone,
+            resume_path=resume_path,
+            location=location,
+            cover_letter_path=cover_letter_path or None,
+            screening_answers=screening_answers or None,
+        )
+        result = await extractor.apply_to_job(job_id, profile)
+        return dataclasses.asdict(result)
 
     @mcp.tool(name="close_session")
     async def close_session() -> str:
