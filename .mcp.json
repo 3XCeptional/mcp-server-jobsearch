@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "indeed-mcp-server": {
+      "command": "/Users/dhiren/Projects/mcp-server-indeed/.venv/bin/python3",
+      "args": ["-m", "indeed_mcp_server"],
+      "type": "stdio"
+    }
+  }
+}
