@@ -221,16 +221,29 @@ async def _maybe_check_matching_radio(form_root: Any, field: Any, answer: str) -
 
 
 async def _answer_screening_questions(
-    form_root: Any, profile: ApplicantProfile, standard_field_names: frozenset[str]
+    form_root: Any,
+    profile: ApplicantProfile,
+    standard_field_names: frozenset[str],
+    *,
+    standard_field_attribute: str = "name",
 ) -> list[str]:
     """Fill every required field answerable from `profile.screening_answers`.
 
     Never guesses: a required field with no matching entry is collected and
     returned, never filled with a plausible-sounding default. Fields already
     handled directly from `profile` (name/email/phone/file uploads) are
-    identified by `standard_field_names` - the site-specific set of `name`
-    attributes each applier's core fields use - and skipped here so they are
-    neither double-filled nor misreported as unanswered.
+    identified by `standard_field_names` - the site-specific set of values a
+    core field carries on the HTML attribute named by
+    `standard_field_attribute` - and skipped here so they are neither
+    double-filled nor misreported as unanswered.
+
+    `standard_field_attribute` defaults to `"name"` (Indeed's core fields are
+    identified by their `name` attribute), but a caller whose site instead
+    identifies its core fields by a different attribute (e.g. Seek's
+    `data-automation`) must pass that attribute name explicitly - comparing
+    `standard_field_names` against the wrong attribute means the exclusion
+    can never match, so every core field gets treated as an unanswerable
+    screening question.
     """
     unanswered: list[str] = []
     required = form_root.locator("[required], [aria-required='true']")
@@ -262,7 +275,17 @@ async def _answer_screening_questions(
 
         if tag == "input" and field_type.lower() == "file":
             continue  # resume/cover-letter uploads are handled separately
-        if name_attr in standard_field_names:
+
+        # The exclusion check compares against whichever attribute this
+        # site's core fields are actually identified by - reusing `name_attr`
+        # when that attribute is "name" avoids a redundant second
+        # `get_attribute()` call for Indeed's (default) call site.
+        excluded_value = (
+            name_attr
+            if standard_field_attribute == "name"
+            else await field.get_attribute(standard_field_attribute)
+        )
+        if excluded_value in standard_field_names:
             continue
 
         label = (

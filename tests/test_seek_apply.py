@@ -145,6 +145,43 @@ def test_normal_form_fills_and_submits(html_page_runner, make_applicant_profile)
     assert Path(result.screenshot_path).exists()
 
 
+def test_required_core_fields_are_not_misreported_as_unanswered_screening_questions(
+    html_page_runner, make_applicant_profile
+):
+    """Regression test for the `data-automation` vs `name` exclusion bug.
+
+    The fixture's name/email/phone inputs are `required` (a plausible real
+    Seek form) and identified only by `data-automation`, never by a `name`
+    attribute matching `_STANDARD_FIELD_NAMES`. Before the fix,
+    `_answer_screening_questions` only ever compared a field's `name`
+    attribute against `_STANDARD_FIELD_NAMES` - which held Seek's
+    `data-automation` values - so the exclusion could never match. Every one
+    of these three core fields (already correctly filled by `_fill_first`
+    earlier in `_run_apply_flow`) was then treated as an extra required
+    field with no `screening_answers` entry, landing in `unanswered` and
+    forcing `blocked_reason="unsupported_apply_flow"` on every real Seek
+    application. This proves that no longer happens: a full, valid profile
+    submits successfully, and none of the core fields ever appear in
+    `unanswered_fields`.
+    """
+    profile = make_applicant_profile(
+        screening_answers={
+            "How did you hear about us?": "Seek",
+            "Notice period (weeks)": "2",
+        },
+    )
+    html = _FIXTURE_PATH.read_text(encoding="utf-8")
+
+    result = _run_apply(html_page_runner, html, profile)
+
+    assert result.blocked_reason != "unsupported_apply_flow"
+    assert "applicantName" not in result.unanswered_fields
+    assert "applicantEmail" not in result.unanswered_fields
+    assert "applicantPhone" not in result.unanswered_fields
+    assert result.unanswered_fields == ()
+    assert result.submitted is True
+
+
 def test_normal_form_reports_unanswered_required_field_without_submitting(html_page_runner, make_applicant_profile):
     profile = make_applicant_profile(
         # "Notice period (weeks)" is deliberately left unanswered - the tool

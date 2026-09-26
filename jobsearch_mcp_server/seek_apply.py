@@ -99,16 +99,20 @@ _SUBMIT_BUTTON_SELECTORS = (
     'button:has-text("Review your application")',
 )
 
-# `data-automation` attributes handled directly from `ApplicantProfile`
-# fields above, excluded from the screening-question scan so they are never
-# double-filled or reported as an unanswered required field. Mirrors
-# apply.py's `_STANDARD_FIELD_NAMES`, but keyed on Seek's own attribute
-# values rather than Indeed's `name` attributes - `_answer_screening_questions`
-# only ever compares against a field's `name` attribute, and Seek's inferred
-# markup uses `data-automation` instead, so this set intentionally does not
-# collide with anything a real Seek `name` attribute would produce; the
-# `applicant.*`-shaped values are kept for readability/parity with Indeed's
-# naming, not because Seek is known to use that literal attribute.
+# `data-automation` attribute values that identify the core fields handled
+# directly from `ApplicantProfile` above, excluded from the screening-
+# question scan so they are never double-filled or reported as an unanswered
+# required field. Mirrors apply.py's `_STANDARD_FIELD_NAMES`, but keyed on
+# Seek's own `data-automation` attribute rather than Indeed's `name`
+# attribute: the call below passes `standard_field_attribute="data-automation"`
+# so `_answer_screening_questions` compares against the right attribute for
+# this site. (Fixed 2026-09-27: an earlier version of this comment claimed
+# not colliding with a real `name` attribute was intentional and safe - it
+# wasn't. `_answer_screening_questions` only ever compared against `name`
+# at the time, so these `data-automation` values could never match anything,
+# and every one of Seek's real, `required` name/email/phone inputs was
+# misreported as an unanswered screening question, blocking every real
+# apply with `unsupported_apply_flow`.)
 _STANDARD_FIELD_NAMES = frozenset(
     {"applicantName", "applicantEmail", "applicantPhone"}
 )
@@ -342,7 +346,10 @@ class SeekJobApplier:
                 )
 
         unanswered = await _answer_screening_questions(
-            form_root, profile, _STANDARD_FIELD_NAMES
+            form_root,
+            profile,
+            _STANDARD_FIELD_NAMES,
+            standard_field_attribute="data-automation",
         )
         if unanswered:
             return ApplyResult(

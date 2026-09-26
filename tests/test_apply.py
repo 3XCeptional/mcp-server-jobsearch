@@ -214,6 +214,97 @@ def test_resume_path_under_home_ssh_directory_is_rejected(html_page_runner, make
 
 
 # ---------------------------------------------------------------------------
+# `standard_field_attribute` parameterization: the exclusion check must
+# compare against the attribute the caller names, not always `name`.
+# ---------------------------------------------------------------------------
+
+_ATTRIBUTE_PARAMETERIZATION_HTML = """
+<!DOCTYPE html>
+<html>
+<body>
+<input type="text" id="f1" name="applicant.name" data-automation="notAName"
+       aria-label="Field One" required />
+<input type="text" id="f2" name="notAName" data-automation="applicantName"
+       aria-label="Field Two" required />
+</body>
+</html>
+"""
+
+
+def test_standard_field_attribute_excludes_by_the_named_attribute_only(
+    html_page_runner, make_applicant_profile
+):
+    """`standard_field_attribute` must gate the exclusion, not just `name`.
+
+    `standard_names` contains both `"applicantName"` (matches `f2`'s
+    `data-automation`, not its `name`) and `"applicant.name"` (matches `f1`'s
+    `name`, not its `data-automation`). No `screening_answers` are supplied
+    for either field, so any field that is NOT excluded is guaranteed to
+    surface in `unanswered`. With `standard_field_attribute="data-automation"`:
+    `f2` must be excluded (its `data-automation` matches) even though its
+    `name` does not, and `f1` must NOT be excluded (its `data-automation`
+    does not match) even though its `name` does - proving the check actually
+    switched to comparing `data-automation`, not silently still comparing
+    `name` underneath.
+    """
+    profile = make_applicant_profile()
+    standard_names = frozenset({"applicantName", "applicant.name"})
+
+    def _run(page):
+        async def _inner():
+            return await apply_common_module._answer_screening_questions(
+                page,
+                profile,
+                standard_names,
+                standard_field_attribute="data-automation",
+            )
+
+        return _inner()
+
+    unanswered = html_page_runner(_ATTRIBUTE_PARAMETERIZATION_HTML, _run)
+
+    # f2: data-automation="applicantName" matches -> excluded, never surfaces.
+    assert "Field Two" not in unanswered
+    # f1: name="applicant.name" matches, but data-automation="notAName" does
+    # not -> NOT excluded, so it surfaces as an unanswered screening question.
+    assert "Field One" in unanswered
+
+
+def test_standard_field_attribute_defaults_to_name_for_indeed(
+    html_page_runner, make_applicant_profile
+):
+    """Indeed's call site relies on the `"name"` default, unambiguously.
+
+    Same fixture and `standard_names`, no `screening_answers`, but no
+    `standard_field_attribute` override this time (Indeed's actual call
+    site never passes one either). Under the default `"name"` comparison,
+    `f1` (`name="applicant.name"`) is excluded and `f2` (`name="notAName"`,
+    despite `data-automation="applicantName"` matching) is not - the mirror
+    image of the previous test, confirming the default keeps Indeed's
+    existing, already-correct behavior unchanged.
+    """
+    profile = make_applicant_profile()
+    standard_names = frozenset({"applicantName", "applicant.name"})
+
+    def _run(page):
+        async def _inner():
+            return await apply_common_module._answer_screening_questions(
+                page, profile, standard_names
+            )
+
+        return _inner()
+
+    unanswered = html_page_runner(_ATTRIBUTE_PARAMETERIZATION_HTML, _run)
+
+    # f1: name="applicant.name" matches under the default "name" attribute
+    # -> excluded, never surfaces.
+    assert "Field One" not in unanswered
+    # f2: name="notAName" does not match (its data-automation match is
+    # irrelevant under the default) -> NOT excluded, surfaces as unanswered.
+    assert "Field Two" in unanswered
+
+
+# ---------------------------------------------------------------------------
 # FIX 2 (logical): checkbox/radio answers must actually be consulted.
 # ---------------------------------------------------------------------------
 
