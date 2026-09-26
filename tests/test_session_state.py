@@ -72,6 +72,51 @@ def test_get_or_create_session_reuses_same_session(tmp_path: Path) -> None:
     fake_launch.assert_awaited_once()
 
 
+def test_get_or_create_session_concurrent_calls_launch_once(tmp_path: Path) -> None:
+    """Two overlapping get_or_create_session() awaits must not race.
+
+    Without the lock, both coroutines can observe self._session is None
+    before either finishes launch_persistent_browser, so both launch a
+    browser and the second assignment orphans the first context/driver.
+    The artificial delay widens the race window so this test would fail
+    reliably (fake_launch called twice, or two different session objects
+    returned) on the unlocked implementation.
+    """
+
+    page = _FakePage()
+    context = _FakeContext(page)
+    playwright = _FakePlaywright()
+
+    async def _delayed_launch(_user_data_dir: Path):
+        await asyncio.sleep(0.05)
+        return playwright, context, page
+
+    fake_launch = AsyncMock(side_effect=_delayed_launch)
+
+    async def _scenario():
+        manager = SessionManager(user_data_dir=tmp_path)
+        with (
+            patch(
+                "jobsearch_mcp_server.session_state.launch_persistent_browser",
+                fake_launch,
+            ),
+            patch(
+                "jobsearch_mcp_server.session_state.ensure_logged_in",
+                AsyncMock(return_value=True),
+            ),
+        ):
+            return await asyncio.gather(
+                manager.get_or_create_session(),
+                manager.get_or_create_session(),
+            )
+
+    session_one, session_two = _run(_scenario())
+
+    fake_launch.assert_awaited_once()
+    assert session_one is session_two
+    assert isinstance(session_one, ScrapingSession)
+
+
 def test_close_is_safe_when_no_session_created(tmp_path: Path) -> None:
     manager = SessionManager(user_data_dir=tmp_path)
 
