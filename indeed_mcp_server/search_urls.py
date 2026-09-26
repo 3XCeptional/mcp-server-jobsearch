@@ -87,5 +87,10 @@ def build_job_search_url(
 
     params["start"] = str(start)
 
-    query = urlencode(params)
+    try:
+        query = urlencode(params)
+    except UnicodeEncodeError as exc:
+        raise ValueError(
+            f"keywords/location contain characters that cannot be URL-encoded: {exc}"
+        ) from exc
     return f"https://{domain}/jobs?{query}"

@@ -127,7 +127,10 @@ async def _extract_job_id_from_card(card: "Locator") -> str | None:
         if await link.count() > 0:
             jk = await link.first.get_attribute("data-jk")
             if jk:
-                return jk
+                try:
+                    return normalize_job_id(jk)
+                except ValueError:
+                    pass  # fall through to the href-based fallback below
     except Exception:  # pragma: no cover - defensive
         pass
 

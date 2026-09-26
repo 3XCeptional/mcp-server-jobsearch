@@ -99,6 +99,23 @@ class TestBuildJobSearchUrl:
         with pytest.raises(ValueError):
             build_job_search_url("   ")
 
+    def test_lone_utf16_surrogate_in_keywords_raises_value_error(self):
+        # A lone surrogate (reachable via a JSON escape like "\ud800" over the
+        # MCP transport) is a valid Python string but can't be UTF-8 encoded.
+        # urlencode() raises UnicodeEncodeError for this - that must be
+        # translated into the ValueError this function's docstring promises,
+        # not leaked as a raw encoding exception.
+        with pytest.raises(ValueError):
+            build_job_search_url("abc\ud800def")
+
+    def test_lone_utf16_surrogate_does_not_raise_unicode_encode_error(self):
+        try:
+            build_job_search_url("abc\ud800def")
+        except ValueError:
+            pass
+        except UnicodeEncodeError:
+            pytest.fail("UnicodeEncodeError leaked instead of being wrapped as ValueError")
+
     def test_keywords_with_spaces_and_special_chars_are_encoded(self):
         url = build_job_search_url("C++ / AI security & risk", "Sydney, NSW")
         # Raw spaces must not appear unescaped in the URL, and the literal

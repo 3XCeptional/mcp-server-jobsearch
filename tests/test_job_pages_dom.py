@@ -94,6 +94,26 @@ _SEARCH_RESULT_CARD_HTML = """
 </body></html>
 """
 
+_SEARCH_RESULT_ADVERSARIAL_JK_WITH_VALID_HREF_HTML = """
+<html><body>
+  <div class="job_seen_beacon">
+    <h2 class="jobTitle"><a data-jk="xyz789&amp;evil=<script>" href="https://au.indeed.com/rc/clk?jk=validhref123">Security Engineer</a></h2>
+    <span data-testid="company-name">Acme Corp</span>
+    <div data-testid="text-location">Sydney NSW</div>
+  </div>
+</body></html>
+"""
+
+_SEARCH_RESULT_ADVERSARIAL_JK_NO_VALID_HREF_HTML = """
+<html><body>
+  <div class="job_seen_beacon">
+    <h2 class="jobTitle"><a data-jk="../../etc/passwd" href="/rc/clk?other=1">Security Engineer</a></h2>
+    <span data-testid="company-name">Acme Corp</span>
+    <div data-testid="text-location">Sydney NSW</div>
+  </div>
+</body></html>
+"""
+
 _SEARCH_RESULT_UNPARSEABLE_CARD_HTML = """
 <html><body>
   <div class="job_seen_beacon">
@@ -119,6 +139,34 @@ def test_parses_a_normal_search_result_card(html_page_runner):
     assert summary.title == "Security Engineer"
     assert summary.company == "Acme Corp"
     assert summary.location == "Sydney NSW"
+
+
+def test_adversarial_data_jk_falls_through_to_valid_href(html_page_runner):
+    """A crafted `data-jk` attribute (containing `&`, `<script>`, etc.) must
+
+    not be returned as-is - it has to fail `normalize_job_id` validation and
+    fall through to the href-based `jk=` fallback, which yields the real,
+    safe job id here.
+    """
+    results = html_page_runner(
+        _SEARCH_RESULT_ADVERSARIAL_JK_WITH_VALID_HREF_HTML,
+        lambda page: parse_search_results_from_page(page),
+    )
+    assert len(results) == 1
+    assert results[0].job_id == "validhref123"
+
+
+def test_adversarial_data_jk_with_no_valid_fallback_skips_card(html_page_runner):
+    """When both the `data-jk` attribute and the href are unusable, the card
+
+    is skipped entirely (job id can't be resolved by either path) rather
+    than leaking the raw adversarial attribute value.
+    """
+    results = html_page_runner(
+        _SEARCH_RESULT_ADVERSARIAL_JK_NO_VALID_HREF_HTML,
+        lambda page: parse_search_results_from_page(page),
+    )
+    assert results == []
 
 
 def test_containers_found_but_zero_parseable_cards_returns_empty_list(html_page_runner):

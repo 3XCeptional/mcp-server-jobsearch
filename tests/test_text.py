@@ -36,6 +36,17 @@ class TestFilterIndeedNoiseLines:
         lines = ["We offer a sponsored visa pathway for this role."]
         assert filter_indeed_noise_lines(lines) == lines
 
+    def test_keeps_sentence_mentioning_cookies_mid_clause(self):
+        # "we use cookies" appears verbatim inside a real, unrelated
+        # sentence here - the substring match must not delete the whole
+        # line just because the noise phrase happens to appear in it.
+        lines = ["We use cookies in our daily bread recipe, not just on websites."]
+        assert filter_indeed_noise_lines(lines) == lines
+
+    def test_keeps_sentence_mentioning_report_this_listing_mid_clause(self):
+        lines = ["This report this listing service helps job seekers flag issues."]
+        assert filter_indeed_noise_lines(lines) == lines
+
     def test_keeps_blank_lines(self):
         lines = ["Security Analyst", "", "Acme Corp"]
         assert filter_indeed_noise_lines(lines) == lines
