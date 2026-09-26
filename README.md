@@ -49,8 +49,9 @@ this repo) pointing `command` at this project's `.venv/bin/python3` with
 
 ## Tools
 
-All four tools are registered on a single `FastMCP` server (`jobsearch-mcp-server`)
-and share one long-lived browser session for the life of the process (see
+All eight tools are registered on a single `FastMCP` server (`jobsearch-mcp-server`).
+Indeed's four tools share one long-lived browser session; Seek's four tools share a
+second, separate one with its own browser profile, so the two never mix cookies (see
 `docs/architecture.md` for the session model).
 
 ### `search_jobs(keywords: str, location: str = "", max_results: int = 20) -> list[dict]`
@@ -89,14 +90,54 @@ audit-trail screenshot taken immediately before the submit click.
 
 ### `close_session() -> str`
 
-Closes the underlying browser session and releases the Chromium process.
+Closes Indeed's underlying browser session and releases its Chromium process.
 Call this when done; otherwise the browser stays open for the life of the
 MCP server process.
+
+### `seek_search_jobs(keywords: str, location: str = "", max_results: int = 20) -> list[dict]`
+
+Same behavior as `search_jobs`, against Seek instead of Indeed. Seek's search
+query parameters are `[INFERENCE]`, sourced from public third-party
+Seek-scraper documentation rather than a verified reference implementation
+the way Indeed's scheme was grounded (see Limitations).
+
+### `seek_get_job_details(job_id: str) -> dict`
+
+Same behavior as `get_job_details`, against Seek instead of Indeed. `job_id`
+accepts a bare numeric Seek job id or a full `/job/<id>` URL; both are
+normalized internally.
+
+### `seek_apply_to_job(job_id, full_name, email, phone, resume_path, location="Sydney, NSW", cover_letter_path="", screening_answers_json="{}") -> dict`
+
+Same behavior, parameters, and return shape as `apply_to_job`, against
+Seek's apply flow instead of Indeed's. Shares its safety logic (attachment
+validation, CAPTCHA/account-wall detection, fail-closed on missing required
+fields) with `apply_to_job` via a common internal module; only the Seek-specific
+form selectors differ, and those are `[INFERENCE]`, unverified against a live
+Seek response.
+
+### `seek_close_session() -> str`
+
+Closes Seek's underlying browser session independently of Indeed's.
 
 ## Limitations
 
 This project is functional for its intended scope, not a general-purpose
-Indeed automation tool. Specifically, and without overselling it:
+Indeed or Seek automation tool. Specifically, and without overselling it:
+
+- **Seek's selectors are unverified against a live response.** Indeed's DOM
+  selectors and URL scheme were grounded against real evidence (job ids
+  already present in a production database, a live-reachability check).
+  Seek's job-detail URL scheme (`/job/<numeric_id>`) is confirmed the same
+  way, but Seek's search query parameters and every CSS selector in
+  `seek_job_pages.py`/`seek_apply.py` are `[INFERENCE]`, built from Seek's
+  documented `data-automation` attribute convention and public third-party
+  scraper documentation, not tested against Seek's actual live markup. All
+  four Seek tools share the exact same fail-closed behavior as their Indeed
+  counterparts (raise/block rather than fabricate a result on a selector
+  miss), so a mismatch surfaces as an honest error, not a wrong answer - but
+  expect Seek's selectors to need real-world correction sooner than
+  Indeed's.
 
 - **Indeed's bot protection can block this outright.** Indeed fronts its
   pages with Cloudflare, and a challenge (interstitial, CAPTCHA) can appear
