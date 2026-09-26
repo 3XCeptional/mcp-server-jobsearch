@@ -2,7 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from indeed_mcp_server.seek_search_urls import (
+from jobsearch_mcp_server.seek_search_urls import (
     DATE_POSTED_MAP,
     WORK_TYPE_MAP,
     build_seek_search_url,

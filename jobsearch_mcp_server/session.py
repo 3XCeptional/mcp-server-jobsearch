@@ -1,7 +1,7 @@
 """Thin wrapper around a single Playwright page.
 
 Page-owning module: holds no knowledge of navigation, auth, or browser
-launch mechanics. Zero imports from other indeed_mcp_server modules so it
+launch mechanics. Zero imports from other jobsearch_mcp_server modules so it
 can sit at the bottom of the dependency graph.
 """
 

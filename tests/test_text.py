@@ -1,4 +1,4 @@
-from indeed_mcp_server.text import filter_indeed_noise_lines, strip_indeed_noise
+from jobsearch_mcp_server.text import filter_indeed_noise_lines, strip_indeed_noise
 
 
 class TestFilterIndeedNoiseLines:

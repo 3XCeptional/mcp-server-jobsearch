@@ -15,8 +15,8 @@ from __future__ import annotations
 import asyncio
 from urllib.parse import parse_qs, urlparse
 
-from indeed_mcp_server.contracts import JobDetail, JobSummary
-from indeed_mcp_server.jobs import JobScraper
+from jobsearch_mcp_server.contracts import JobDetail, JobSummary
+from jobsearch_mcp_server.jobs import JobScraper
 
 
 def _run(coro):
@@ -161,7 +161,7 @@ def test_max_results_zero_or_negative_short_circuits_without_any_page_fetch():
 
 
 def test_pagination_advances_the_start_offset_by_results_per_page(monkeypatch):
-    monkeypatch.setattr("indeed_mcp_server.jobs.RESULTS_PER_PAGE", 15)
+    monkeypatch.setattr("jobsearch_mcp_server.jobs.RESULTS_PER_PAGE", 15)
     reader = _FakeReader(
         [
             [_job("a")],
@@ -180,7 +180,7 @@ def test_pagination_advances_the_start_offset_by_results_per_page(monkeypatch):
 def test_respects_the_max_search_pages_ceiling(monkeypatch):
     # Reader never runs dry and max_results is unreachable, so only the
     # MAX_SEARCH_PAGES ceiling (patched down to 3 here) can stop the loop.
-    monkeypatch.setattr("indeed_mcp_server.jobs.MAX_SEARCH_PAGES", 3)
+    monkeypatch.setattr("jobsearch_mcp_server.jobs.MAX_SEARCH_PAGES", 3)
     reader = _InfiniteUniqueReader()
     navigator = _FakeNavigator()
     scraper = JobScraper(navigator, reader)

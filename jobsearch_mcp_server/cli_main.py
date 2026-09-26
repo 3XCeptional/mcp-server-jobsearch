@@ -14,7 +14,7 @@ import argparse
 
 def build_parser() -> argparse.ArgumentParser:
     return argparse.ArgumentParser(
-        prog="indeed-mcp-server",
+        prog="jobsearch-mcp-server",
         description=(
             "MCP server that gives AI assistants access to Indeed job "
             "search, postings, and listings through the user's own browser "
@@ -29,7 +29,7 @@ def main() -> None:
     # Imported here, not at module scope, so `--help`/`-h` (which exits
     # inside `parse_args()` above) never pays the cost of importing the
     # server module (and, transitively, Playwright/mcp) just to print usage.
-    from indeed_mcp_server.server import main as run_server
+    from jobsearch_mcp_server.server import main as run_server
 
     run_server()
 

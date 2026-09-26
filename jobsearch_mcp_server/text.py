@@ -1,6 +1,6 @@
 """Cleanup for text extracted from rendered Indeed pages.
 
-Browser-free, no imports from other indeed_mcp_server modules (or anything
+Browser-free, no imports from other jobsearch_mcp_server modules (or anything
 else) so it can be unit tested against fixture strings without a browser.
 """
 

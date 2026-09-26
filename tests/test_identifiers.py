@@ -1,6 +1,6 @@
 import pytest
 
-from indeed_mcp_server.identifiers import job_view_url, normalize_job_id
+from jobsearch_mcp_server.identifiers import job_view_url, normalize_job_id
 
 
 class TestNormalizeJobId:
@@ -93,7 +93,7 @@ class TestJobViewUrl:
             job_view_url("abc123def456", domain="evil.example.com")
 
     def test_roundtrip_with_normalize_job_id(self):
-        from indeed_mcp_server.identifiers import normalize_job_id
+        from jobsearch_mcp_server.identifiers import normalize_job_id
 
         original_url = "https://au.indeed.com/viewjob?jk=abc123def456&tk=xyz"
         job_id = normalize_job_id(original_url)

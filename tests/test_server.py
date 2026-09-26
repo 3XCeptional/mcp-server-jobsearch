@@ -1,7 +1,7 @@
 """Smoke tests verifying the real MCP tools are registered on `server.mcp`.
 
 This exercises the actual constructed `MCPServer` (aliased `FastMCP`)
-object built by `indeed_mcp_server.server`, not the source text - grepping
+object built by `jobsearch_mcp_server.server`, not the source text - grepping
 `server.py` for `@mcp.tool(name=...)` decorators was already the leaf-1.2.2
 gate. `mcp==2.2.0`'s `MCPServer.list_tools()` is the real, documented
 introspection surface (confirmed via `inspect.signature` against the
@@ -20,7 +20,7 @@ import asyncio
 
 import pytest
 
-from indeed_mcp_server.server import extractor, mcp, seek_extractor
+from jobsearch_mcp_server.server import extractor, mcp, seek_extractor
 
 EXPECTED_TOOL_NAMES = {
     "search_jobs",
@@ -144,7 +144,7 @@ class TestJobIdNormalizedAtToolBoundary:
 
         async def fake_apply_to_job(job_id, profile):
             received["job_id"] = job_id
-            from indeed_mcp_server.contracts import ApplyResult
+            from jobsearch_mcp_server.contracts import ApplyResult
 
             return ApplyResult(job_id=job_id, submitted=True)
 
@@ -172,7 +172,7 @@ class TestJobIdNormalizedAtToolBoundary:
         async def fake_apply_to_job(job_id, profile):
             nonlocal called
             called = True
-            from indeed_mcp_server.contracts import ApplyResult
+            from jobsearch_mcp_server.contracts import ApplyResult
 
             return ApplyResult(job_id=job_id, submitted=True)
 

@@ -19,11 +19,11 @@ try:
 except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP  # mcp>=2.0
 
-from indeed_mcp_server.contracts import ApplicantProfile
-from indeed_mcp_server.extractor import IndeedExtractor, SeekExtractor
-from indeed_mcp_server.identifiers import normalize_job_id
-from indeed_mcp_server.seek_identifiers import normalize_seek_job_id
-from indeed_mcp_server.session_state import SessionManager
+from jobsearch_mcp_server.contracts import ApplicantProfile
+from jobsearch_mcp_server.extractor import IndeedExtractor, SeekExtractor
+from jobsearch_mcp_server.identifiers import normalize_job_id
+from jobsearch_mcp_server.seek_identifiers import normalize_seek_job_id
+from jobsearch_mcp_server.session_state import SessionManager
 
 # Constructed eagerly at import time, but cheap: `SessionManager.__init__` and
 # `IndeedExtractor.__init__` only store configuration - the actual browser
@@ -40,7 +40,7 @@ extractor = IndeedExtractor(SessionManager())
 _SEEK_USER_DATA_DIR = Path.home() / ".indeed-mcp-server" / "seek-browser-profile"
 seek_extractor = SeekExtractor(SessionManager(_SEEK_USER_DATA_DIR))
 
-mcp = FastMCP("indeed-mcp-server")
+mcp = FastMCP("jobsearch-mcp-server")
 
 
 def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:

@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 
-from indeed_mcp_server.contracts import ExtractionError, JobDetail
-from indeed_mcp_server.job_pages import parse_job_detail_from_page, parse_search_results_from_page
+from jobsearch_mcp_server.contracts import ExtractionError, JobDetail
+from jobsearch_mcp_server.job_pages import parse_job_detail_from_page, parse_search_results_from_page
 
 _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "indeed_job_detail_sample.html"
 _FIXTURE_URL = "https://example.test/viewjob?jk=abc123"

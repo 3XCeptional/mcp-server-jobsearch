@@ -1,4 +1,4 @@
-"""Shared pytest fixtures for the indeed_mcp_server test suite.
+"""Shared pytest fixtures for the jobsearch_mcp_server test suite.
 
 Kept intentionally small: only fixtures that collapse *real*, verified
 duplication across multiple existing test files are added here. Fixtures
@@ -28,7 +28,7 @@ from typing import Awaitable, Callable, TypeVar
 import pytest
 from playwright.async_api import Page, async_playwright
 
-from indeed_mcp_server.contracts import ApplicantProfile
+from jobsearch_mcp_server.contracts import ApplicantProfile
 
 _T = TypeVar("_T")
 

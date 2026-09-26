@@ -1,6 +1,6 @@
 """Indeed job id parsing and URL construction.
 
-Browser-free. Must not import from any other indeed_mcp_server module, so
+Browser-free. Must not import from any other jobsearch_mcp_server module, so
 the browser/session layers built in parallel can depend on this module
 without pulling in anything heavier.
 """

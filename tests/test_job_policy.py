@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from indeed_mcp_server.job_policy import (
+from jobsearch_mcp_server.job_policy import (
     RESULTS_PER_PAGE,
     next_start_offset,
     pages_needed_for,

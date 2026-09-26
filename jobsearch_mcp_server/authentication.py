@@ -15,7 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from indeed_mcp_server import navigation  # noqa: F401  (dependency-graph layering)
+from jobsearch_mcp_server import navigation  # noqa: F401  (dependency-graph layering)
 
 _CHALLENGE_SELECTORS = (
     "#challenge-running",

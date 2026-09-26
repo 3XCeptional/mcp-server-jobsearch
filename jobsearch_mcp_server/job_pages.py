@@ -14,10 +14,10 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from indeed_mcp_server.contracts import ExtractionError, JobDetail, JobSummary
-from indeed_mcp_server.identifiers import job_view_url, normalize_job_id
-from indeed_mcp_server.navigation import PageNavigator
-from indeed_mcp_server.text import strip_indeed_noise
+from jobsearch_mcp_server.contracts import ExtractionError, JobDetail, JobSummary
+from jobsearch_mcp_server.identifiers import job_view_url, normalize_job_id
+from jobsearch_mcp_server.navigation import PageNavigator
+from jobsearch_mcp_server.text import strip_indeed_noise
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from playwright.async_api import Locator, Page

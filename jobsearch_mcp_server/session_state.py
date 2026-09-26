@@ -13,9 +13,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from indeed_mcp_server.authentication import ensure_logged_in
-from indeed_mcp_server.browser_launch import launch_persistent_browser
-from indeed_mcp_server.session import ScrapingSession
+from jobsearch_mcp_server.authentication import ensure_logged_in
+from jobsearch_mcp_server.browser_launch import launch_persistent_browser
+from jobsearch_mcp_server.session import ScrapingSession
 
 _DEFAULT_USER_DATA_DIR = Path.home() / ".indeed-mcp-server" / "browser-profile"
 

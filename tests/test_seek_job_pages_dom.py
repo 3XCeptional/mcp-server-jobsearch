@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from indeed_mcp_server.contracts import ExtractionError, JobDetail
-from indeed_mcp_server.seek_job_pages import (
+from jobsearch_mcp_server.contracts import ExtractionError, JobDetail
+from jobsearch_mcp_server.seek_job_pages import (
     parse_seek_job_detail_from_page,
     parse_seek_search_results_from_page,
 )

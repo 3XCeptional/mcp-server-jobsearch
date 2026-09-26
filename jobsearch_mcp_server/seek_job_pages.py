@@ -33,9 +33,9 @@ import logging
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-from indeed_mcp_server.contracts import ExtractionError, JobDetail, JobSummary
-from indeed_mcp_server.navigation import PageNavigator
-from indeed_mcp_server.seek_identifiers import normalize_seek_job_id, seek_job_view_url
+from jobsearch_mcp_server.contracts import ExtractionError, JobDetail, JobSummary
+from jobsearch_mcp_server.navigation import PageNavigator
+from jobsearch_mcp_server.seek_identifiers import normalize_seek_job_id, seek_job_view_url
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from playwright.async_api import Locator, Page

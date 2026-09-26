@@ -11,14 +11,14 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Any
 
-from indeed_mcp_server.apply import JobApplier
-from indeed_mcp_server.contracts import ApplicantProfile, ApplyResult, JobSummary
-from indeed_mcp_server.job_pages import JobPageReader
-from indeed_mcp_server.jobs import JobScraper
-from indeed_mcp_server.navigation import PageNavigator
-from indeed_mcp_server.seek_job_pages import SeekJobPageReader
-from indeed_mcp_server.seek_jobs import SeekJobScraper
-from indeed_mcp_server.session_state import SessionManager
+from jobsearch_mcp_server.apply import JobApplier
+from jobsearch_mcp_server.contracts import ApplicantProfile, ApplyResult, JobSummary
+from jobsearch_mcp_server.job_pages import JobPageReader
+from jobsearch_mcp_server.jobs import JobScraper
+from jobsearch_mcp_server.navigation import PageNavigator
+from jobsearch_mcp_server.seek_job_pages import SeekJobPageReader
+from jobsearch_mcp_server.seek_jobs import SeekJobScraper
+from jobsearch_mcp_server.session_state import SessionManager
 
 
 class IndeedExtractor:

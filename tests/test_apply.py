@@ -36,9 +36,9 @@ from typing import Any
 
 import pytest
 
-from indeed_mcp_server import apply as apply_module
-from indeed_mcp_server.apply import JobApplier
-from indeed_mcp_server.contracts import ExtractionError
+from jobsearch_mcp_server import apply as apply_module
+from jobsearch_mcp_server.apply import JobApplier
+from jobsearch_mcp_server.contracts import ExtractionError
 
 _FIXTURE_PATH = Path(__file__).parent / "fixtures" / "indeed_apply_modal_sample.html"
 

@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from enum import Enum
 
-from indeed_mcp_server.contracts import ExtractionError
-from indeed_mcp_server.session import ScrapingSession
+from jobsearch_mcp_server.contracts import ExtractionError
+from jobsearch_mcp_server.session import ScrapingSession
 
 
 class WaitUntil(str, Enum):

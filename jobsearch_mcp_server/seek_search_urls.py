@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
-from indeed_mcp_server.seek_identifiers import _validate_seek_domain
+from jobsearch_mcp_server.seek_identifiers import _validate_seek_domain
 
 # [INFERENCE] Seek's presumed query param for work type is `worktype`.
 WORK_TYPE_MAP: dict[str, str] = {

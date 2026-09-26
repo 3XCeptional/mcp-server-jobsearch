@@ -1,4 +1,4 @@
-# indeed-mcp-server
+# jobsearch-mcp-server
 
 MCP server that gives AI assistants like Claude access to Indeed job search,
 job postings, and job applications through the user's own local browser
@@ -15,8 +15,8 @@ search or job-detail lookups.
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/3xceptional/mcp-server-indeed.git
-cd mcp-server-indeed
+git clone https://github.com/3xceptional/mcp-server-jobsearch.git
+cd mcp-server-jobsearch
 uv sync            # or: pip install -e .
 uv run playwright install chromium   # or: playwright install chromium
 ```
@@ -30,22 +30,22 @@ browser without it.
 As a standalone process (stdio MCP transport, blocks waiting for input):
 
 ```bash
-python -m indeed_mcp_server
+python -m jobsearch_mcp_server
 ```
 
 Or, once installed, via the console script:
 
 ```bash
-indeed-mcp-server
+jobsearch-mcp-server
 ```
 
 To register it with Claude Code, add a `.mcp.json` (see the one committed in
 this repo) pointing `command` at this project's `.venv/bin/python3` with
-`args: ["-m", "indeed_mcp_server"]`.
+`args: ["-m", "jobsearch_mcp_server"]`.
 
 ## Tools
 
-All four tools are registered on a single `FastMCP` server (`indeed-mcp-server`)
+All four tools are registered on a single `FastMCP` server (`jobsearch-mcp-server`)
 and share one long-lived browser session for the life of the process (see
 `docs/architecture.md` for the session model).
 

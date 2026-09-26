@@ -1,6 +1,6 @@
 """Indeed-specific search/pagination constants.
 
-Browser-free. Must not import from any other indeed_mcp_server module (other
+Browser-free. Must not import from any other jobsearch_mcp_server module (other
 than the fact that nothing here needs to), so it stays trivially unit
 testable and safe for both the URL-building layer and the orchestration
 layer to depend on.

@@ -20,10 +20,10 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-from indeed_mcp_server import authentication
-from indeed_mcp_server.contracts import ApplicantProfile, ApplyResult, ExtractionError
-from indeed_mcp_server.identifiers import job_view_url
-from indeed_mcp_server.navigation import PageNavigator
+from jobsearch_mcp_server import authentication
+from jobsearch_mcp_server.contracts import ApplicantProfile, ApplyResult, ExtractionError
+from jobsearch_mcp_server.identifiers import job_view_url
+from jobsearch_mcp_server.navigation import PageNavigator
 
 logger = logging.getLogger(__name__)
 

@@ -1,6 +1,6 @@
 """Shared data contracts for Indeed job data.
 
-Browser-free, no imports from other indeed_mcp_server modules, so both the
+Browser-free, no imports from other jobsearch_mcp_server modules, so both the
 pure URL/text utilities and the browser/session/scraping layers can depend
 on these shapes without a cyclic or heavy import.
 """

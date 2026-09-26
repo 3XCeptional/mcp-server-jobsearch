@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from urllib.parse import urlencode
 
-from indeed_mcp_server.identifiers import _validate_domain
+from jobsearch_mcp_server.identifiers import _validate_domain
 
 # Indeed's real query param for job type is `jt`.
 JOB_TYPE_MAP: dict[str, str] = {

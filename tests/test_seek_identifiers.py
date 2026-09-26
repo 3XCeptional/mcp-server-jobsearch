@@ -1,6 +1,6 @@
 import pytest
 
-from indeed_mcp_server.seek_identifiers import normalize_seek_job_id, seek_job_view_url
+from jobsearch_mcp_server.seek_identifiers import normalize_seek_job_id, seek_job_view_url
 
 
 class TestNormalizeSeekJobId:

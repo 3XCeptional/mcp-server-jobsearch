@@ -11,8 +11,8 @@ import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
-from indeed_mcp_server.session import ScrapingSession
-from indeed_mcp_server.session_state import SessionManager
+from jobsearch_mcp_server.session import ScrapingSession
+from jobsearch_mcp_server.session_state import SessionManager
 
 
 class _FakePage:
@@ -53,11 +53,11 @@ def test_get_or_create_session_reuses_same_session(tmp_path: Path) -> None:
 
     with (
         patch(
-            "indeed_mcp_server.session_state.launch_persistent_browser",
+            "jobsearch_mcp_server.session_state.launch_persistent_browser",
             fake_launch,
         ),
         patch(
-            "indeed_mcp_server.session_state.ensure_logged_in",
+            "jobsearch_mcp_server.session_state.ensure_logged_in",
             AsyncMock(return_value=True),
         ),
     ):
@@ -85,7 +85,7 @@ def test_close_does_not_stop_playwright_when_no_session_created(tmp_path: Path) 
     fake_launch = AsyncMock(return_value=(playwright, _FakeContext(_FakePage()), _FakePage()))
 
     with patch(
-        "indeed_mcp_server.session_state.launch_persistent_browser",
+        "jobsearch_mcp_server.session_state.launch_persistent_browser",
         fake_launch,
     ):
         manager = SessionManager(user_data_dir=tmp_path)
@@ -103,11 +103,11 @@ def test_close_calls_underlying_context_close(tmp_path: Path) -> None:
 
     with (
         patch(
-            "indeed_mcp_server.session_state.launch_persistent_browser",
+            "jobsearch_mcp_server.session_state.launch_persistent_browser",
             fake_launch,
         ),
         patch(
-            "indeed_mcp_server.session_state.ensure_logged_in",
+            "jobsearch_mcp_server.session_state.ensure_logged_in",
             AsyncMock(return_value=True),
         ),
     ):

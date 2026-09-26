@@ -10,11 +10,11 @@ from __future__ import annotations
 
 import logging
 
-from indeed_mcp_server.contracts import JobDetail, JobSummary
-from indeed_mcp_server.job_pages import JobPageReader
-from indeed_mcp_server.job_policy import MAX_SEARCH_PAGES, RESULTS_PER_PAGE, next_start_offset
-from indeed_mcp_server.navigation import PageNavigator
-from indeed_mcp_server.search_urls import build_job_search_url
+from jobsearch_mcp_server.contracts import JobDetail, JobSummary
+from jobsearch_mcp_server.job_pages import JobPageReader
+from jobsearch_mcp_server.job_policy import MAX_SEARCH_PAGES, RESULTS_PER_PAGE, next_start_offset
+from jobsearch_mcp_server.navigation import PageNavigator
+from jobsearch_mcp_server.search_urls import build_job_search_url
 
 logger = logging.getLogger(__name__)
 
