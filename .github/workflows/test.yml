@@ -1,0 +1,28 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project
+        run: |
+          pip install -e .
+          pip install "pytest>=8.0.0"
+
+      - name: Install Playwright Chromium
+        run: playwright install chromium --with-deps
+
+      - name: Run tests
+        run: pytest -q

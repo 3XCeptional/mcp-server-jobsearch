@@ -36,3 +36,4 @@ htmlcov/
 # Editors
 .idea/
 .vscode/
+.refinement/
