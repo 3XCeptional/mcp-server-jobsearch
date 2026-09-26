@@ -16,9 +16,9 @@ def build_parser() -> argparse.ArgumentParser:
     return argparse.ArgumentParser(
         prog="jobsearch-mcp-server",
         description=(
-            "MCP server that gives AI assistants access to Indeed job "
-            "search, postings, and listings through the user's own browser "
-            "session, over the stdio MCP transport."
+            "MCP server that gives AI assistants access to Indeed and Seek "
+            "job search, postings, and listings through the user's own "
+            "browser session, over the stdio MCP transport."
         ),
     )
 

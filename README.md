@@ -1,10 +1,14 @@
 # jobsearch-mcp-server
 
-MCP server that gives AI assistants like Claude access to Indeed job search,
-job postings, and job applications through the user's own local browser
-session. Built with Playwright, modeled on the `mcp-server-linkedin`
+MCP server that gives AI assistants like Claude access to Indeed and Seek
+job search, job postings, and job applications through the user's own local
+browser session. Built with Playwright, modeled on the `mcp-server-linkedin`
 architecture (session/browser layer, page-owning vs. browser-free module
 split, MCP tool surface).
+
+Seek support (`seek_search_jobs`, `seek_get_job_details`,
+`seek_close_session`) reuses the same generic session/browser layer with its
+own separate browser profile, so Indeed and Seek never share cookies.
 
 The server drives a real, visible Chromium window on the user's machine. It
 does not use Indeed's private API and does not require Indeed login for
