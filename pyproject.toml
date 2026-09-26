@@ -1,6 +1,6 @@
 [project]
 name = "jobsearch-mcp-server"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server that gives AI assistants like Claude access to Indeed and Seek job search, postings, and listings through the user's own browser session."
 readme = "README.md"
 requires-python = ">=3.11"
