@@ -23,7 +23,7 @@ work (URL building, id parsing, text cleanup).
 | `seek_identifiers.py` | `normalize_seek_job_id()`, `seek_job_view_url()` | browser-free |
 | `search_urls.py` | `build_job_search_url()`, `JOB_TYPE_MAP`, `DATE_POSTED_MAP` | browser-free |
 | `seek_search_urls.py` | `build_seek_search_url()`, `WORK_TYPE_MAP`, `DATE_POSTED_MAP` | browser-free |
-| `job_policy.py` | `RESULTS_PER_PAGE`, `MAX_SEARCH_PAGES`, `next_start_offset()`, `pages_needed_for()` | browser-free |
+| `job_policy.py` | `RESULTS_PER_PAGE`, `MAX_SEARCH_PAGES`, `next_start_offset()` | browser-free |
 | `text.py` | `strip_indeed_noise()`, `filter_indeed_noise_lines()` | browser-free |
 | `jobs.py` | `JobScraper` | browser-free (orchestrates `JobPageReader`, never touches a `Page` directly) |
 | `seek_jobs.py` | `SeekJobScraper` | browser-free (orchestrates `SeekJobPageReader`, never touches a `Page` directly) |
