@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from pathlib import Path
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -19,8 +20,9 @@ except ModuleNotFoundError:
     from mcp.server.mcpserver import MCPServer as FastMCP  # mcp>=2.0
 
 from indeed_mcp_server.contracts import ApplicantProfile
-from indeed_mcp_server.extractor import IndeedExtractor
+from indeed_mcp_server.extractor import IndeedExtractor, SeekExtractor
 from indeed_mcp_server.identifiers import normalize_job_id
+from indeed_mcp_server.seek_identifiers import normalize_seek_job_id
 from indeed_mcp_server.session_state import SessionManager
 
 # Constructed eagerly at import time, but cheap: `SessionManager.__init__` and
@@ -29,6 +31,14 @@ from indeed_mcp_server.session_state import SessionManager
 # `SessionManager.get_or_create_session()`, the first time a tool call
 # actually needs one.
 extractor = IndeedExtractor(SessionManager())
+
+# Seek gets its own SessionManager, pointed at its own browser profile
+# directory - Seek and Indeed are different sites and must not share
+# cookies/session state, so this deliberately does not reuse the
+# default `~/.indeed-mcp-server/browser-profile` directory Indeed's
+# SessionManager() call above defaults to.
+_SEEK_USER_DATA_DIR = Path.home() / ".indeed-mcp-server" / "seek-browser-profile"
+seek_extractor = SeekExtractor(SessionManager(_SEEK_USER_DATA_DIR))
 
 mcp = FastMCP("indeed-mcp-server")
 
@@ -92,6 +102,11 @@ def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
         """
         job_id = normalize_job_id(job_id)
         screening_answers = json.loads(screening_answers_json) if screening_answers_json else {}
+        if not isinstance(screening_answers, dict):
+            raise ValueError(
+                "screening_answers_json must decode to a JSON object (dict), got "
+                f"{type(screening_answers).__name__}"
+            )
         profile = ApplicantProfile(
             full_name=full_name,
             email=email,
@@ -111,7 +126,50 @@ def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
         return "Indeed session closed."
 
 
+def register_seek_job_tools(mcp: FastMCP, seek_extractor: SeekExtractor) -> None:
+    """Register the Seek job tools on `mcp`, delegating to `seek_extractor`.
+
+    `seek_apply_to_job` is a later leaf's concern, not this one.
+    """
+
+    @mcp.tool(name="seek_search_jobs")
+    async def seek_search_jobs(
+        keywords: str, location: str = "", max_results: int = 20
+    ) -> list[dict]:
+        """Search Seek for jobs matching `keywords`, optionally near `location`."""
+        results = await seek_extractor.search_jobs(
+            keywords,
+            location or None,
+            max_results,
+        )
+        return [
+            {
+                "job_id": r.job_id,
+                "title": r.title,
+                "company": r.company,
+                "location": r.location,
+                "snippet": r.snippet,
+                "url": r.url,
+                "posted": r.posted,
+            }
+            for r in results
+        ]
+
+    @mcp.tool(name="seek_get_job_details")
+    async def seek_get_job_details(job_id: str) -> dict:
+        """Fetch full detail (description, salary, job type) for one Seek job id."""
+        job_id = normalize_seek_job_id(job_id)
+        return await seek_extractor.get_job_details(job_id)
+
+    @mcp.tool(name="seek_close_session")
+    async def seek_close_session() -> str:
+        """Close Seek's underlying browser session, releasing its Chromium process."""
+        await seek_extractor.close_session()
+        return "Seek session closed."
+
+
 register_job_tools(mcp, extractor)
+register_seek_job_tools(mcp, seek_extractor)
 
 
 def main() -> None:
