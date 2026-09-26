@@ -27,6 +27,17 @@ RESULTS_PER_PAGE = 15
 # "no more results") from paginating forever.
 MAX_SEARCH_PAGES = 50
 
+# Delay (in seconds) between consecutive page-navigation requests during
+# pagination. Both Indeed (Cloudflare, per this project's README) and Seek
+# front their search results with bot-detection, and unthrottled back-to-back
+# navigation across up to MAX_SEARCH_PAGES pages is one of the more direct
+# ways to trip it. This value is a reasonable, deliberately chosen estimate
+# for "enough to not look like a script hammering the endpoint" - it is not
+# a verified-optimal number tuned against either site's actual detection
+# thresholds, and may need revisiting if either site still flags pagination
+# at this pace.
+PAGINATION_DELAY_SECONDS = 1.5
+
 
 def next_start_offset(current_start: int, results_per_page: int = RESULTS_PER_PAGE) -> int:
     """Compute the `start=` offset for the page after `current_start`.

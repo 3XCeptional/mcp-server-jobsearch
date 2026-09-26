@@ -12,10 +12,11 @@ touches a Playwright `Page` directly - all DOM access is delegated to the
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from jobsearch_mcp_server.contracts import JobDetail, JobSummary
-from jobsearch_mcp_server.job_policy import MAX_SEARCH_PAGES
+from jobsearch_mcp_server.job_policy import MAX_SEARCH_PAGES, PAGINATION_DELAY_SECONDS
 from jobsearch_mcp_server.navigation import PageNavigator
 from jobsearch_mcp_server.seek_job_pages import SeekJobPageReader
 from jobsearch_mcp_server.seek_search_urls import build_seek_search_url
@@ -50,7 +51,11 @@ class SeekJobScraper:
             walking pages eventually" independent of the pagination scheme).
 
         Results are deduped by `job_id` and the returned list is capped at
-        `max_results`.
+        `max_results`. A `job_policy.PAGINATION_DELAY_SECONDS` delay is
+        inserted between consecutive page requests (never before the first
+        page, never after a page that ends the loop) so back-to-back
+        pagination doesn't trip Seek's bot detection - see
+        `job_policy.PAGINATION_DELAY_SECONDS` for why.
         """
         if max_results <= 0:
             return []
@@ -58,7 +63,7 @@ class SeekJobScraper:
         collected: dict[str, JobSummary] = {}
         page_number = 1
 
-        for _page_index in range(MAX_SEARCH_PAGES):
+        for page_index in range(MAX_SEARCH_PAGES):
             url = build_seek_search_url(
                 keywords,
                 location,
@@ -80,6 +85,12 @@ class SeekJobScraper:
 
             if len(collected) >= max_results:
                 break
+
+            # Another page is about to be requested - throttle before it.
+            # Skipped on the last permitted iteration since the loop is
+            # about to exit anyway and the sleep would only delay returning.
+            if page_index < MAX_SEARCH_PAGES - 1:
+                await asyncio.sleep(PAGINATION_DELAY_SECONDS)
 
             page_number += 1
 

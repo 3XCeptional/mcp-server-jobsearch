@@ -16,6 +16,7 @@ import asyncio
 from urllib.parse import parse_qs, urlparse
 
 from jobsearch_mcp_server.contracts import JobDetail, JobSummary
+from jobsearch_mcp_server.job_policy import PAGINATION_DELAY_SECONDS
 from jobsearch_mcp_server.jobs import JobScraper
 
 
@@ -190,6 +191,76 @@ def test_respects_the_max_search_pages_ceiling(monkeypatch):
     assert len(results) == 3
     assert reader.call_count == 3
     assert len(navigator.urls_visited) == 3
+
+
+def test_single_page_result_incurs_no_pagination_delay(monkeypatch):
+    # max_results is satisfied on page 1, so the loop breaks before ever
+    # deciding to request a second page - no sleep should happen at all.
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("jobsearch_mcp_server.jobs.asyncio.sleep", _fake_sleep)
+
+    reader = _FakeReader([[_job("a"), _job("b"), _job("c")]])
+    navigator = _FakeNavigator()
+    scraper = JobScraper(navigator, reader)
+
+    results = _run(scraper.search_jobs("security analyst", max_results=2))
+
+    assert len(results) == 2
+    assert reader.call_count == 1
+    assert sleep_calls == []
+
+
+def test_three_page_search_sleeps_exactly_twice_between_pages(monkeypatch):
+    # 3 pages needed (page 3 exhausts max_results) -> exactly 2 delays:
+    # between page 1->2 and page 2->3. None before page 1, none after page 3.
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("jobsearch_mcp_server.jobs.asyncio.sleep", _fake_sleep)
+
+    reader = _FakeReader(
+        [
+            [_job("a")],
+            [_job("b")],
+            [_job("c")],
+        ]
+    )
+    navigator = _FakeNavigator()
+    scraper = JobScraper(navigator, reader)
+
+    results = _run(scraper.search_jobs("security analyst", max_results=3))
+
+    assert len(results) == 3
+    assert reader.call_count == 3
+    assert sleep_calls == [PAGINATION_DELAY_SECONDS, PAGINATION_DELAY_SECONDS]
+
+
+def test_max_search_pages_ceiling_does_not_sleep_after_the_final_page(monkeypatch):
+    # Reader never runs dry and max_results is unreachable, so the ceiling
+    # (patched to 3) is what stops the loop. Only 2 delays should fire -
+    # between page 1->2 and 2->3 - not a pointless trailing sleep after the
+    # 3rd page's results are already collected and the loop is about to end.
+    monkeypatch.setattr("jobsearch_mcp_server.jobs.MAX_SEARCH_PAGES", 3)
+    sleep_calls: list[float] = []
+
+    async def _fake_sleep(seconds: float) -> None:
+        sleep_calls.append(seconds)
+
+    monkeypatch.setattr("jobsearch_mcp_server.jobs.asyncio.sleep", _fake_sleep)
+
+    reader = _InfiniteUniqueReader()
+    navigator = _FakeNavigator()
+    scraper = JobScraper(navigator, reader)
+
+    _run(scraper.search_jobs("security analyst", max_results=1_000_000))
+
+    assert sleep_calls == [PAGINATION_DELAY_SECONDS, PAGINATION_DELAY_SECONDS]
 
 
 def test_get_job_details_delegates_straight_to_the_reader():
