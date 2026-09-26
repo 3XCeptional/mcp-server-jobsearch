@@ -32,16 +32,19 @@ from pathlib import Path
 from typing import Any, Callable
 
 from jobsearch_mcp_server import authentication
-from jobsearch_mcp_server.apply import _ACCOUNT_LOGIN_SELECTORS
 from jobsearch_mcp_server.apply_common import (
+    _ACCOUNT_LOGIN_SELECTORS,
     _CAPTCHA_SELECTORS,
     _answer_screening_questions,
     _any_selector_present,
+    _click_reveals_external_domain,
     _fill_first,
     _first_present,
     _is_external_domain,
+    _resolve_page,
     _upload_first,
     _validate_attachment_path,
+    _wait_for_apply_form_root,
     _wait_for_submission_success,
 )
 from jobsearch_mcp_server.contracts import ApplicantProfile, ApplyResult, ExtractionError
@@ -121,76 +124,6 @@ _STANDARD_FIELD_NAMES = frozenset(
 _SEEK_DOMAIN_SUFFIX = "seek.com.au"
 
 
-def _resolve_page(navigator: PageNavigator, page_getter: Callable[[], Any] | None) -> Any:
-    """Fetch the live Playwright Page a navigator is driving.
-
-    Mirrors `apply._resolve_page` exactly - see that function's docstring
-    for why the private `_session` attribute is tried alongside the
-    (currently nonexistent) public `session` name.
-    """
-    for attr_path in ("session", "_session"):
-        session = getattr(navigator, attr_path, None)
-        if session is not None and hasattr(session, "page"):
-            return session.page
-    if hasattr(navigator, "page"):
-        return navigator.page
-    if page_getter is not None:
-        return page_getter()
-    raise AttributeError(
-        "PageNavigator instance exposes no reachable Playwright Page via "
-        "`.session.page`, `._session.page`, `.page`, or a supplied page_getter"
-    )
-
-
-async def _wait_for_apply_form_root(page: Any, timeout_ms: int = 10000) -> Any:
-    """Return the apply form's root: the modal iframe if one appears, else the page.
-
-    Mirrors `apply._wait_for_apply_form_root` exactly, using Seek's own
-    (inferred) iframe id prefix instead of Indeed's.
-    """
-    try:
-        await page.wait_for_selector(_APPLY_IFRAME_SELECTOR, timeout=timeout_ms)
-        return page.frame_locator(_APPLY_IFRAME_SELECTOR)
-    except Exception:
-        return page
-
-
-async def _click_reveals_external_domain(page: Any, locator: Any, wait_ms: int = 1500) -> bool:
-    """Click an "apply on company site" control and check if it left seek.com.au.
-
-    Mirrors `apply._click_reveals_external_domain` exactly, checking against
-    Seek's own domain suffix instead of Indeed's.
-    """
-    context = getattr(page, "context", None)
-    pages_before = set(context.pages) if context is not None else set()
-    try:
-        await locator.click(timeout=5000)
-    except Exception:
-        return True
-
-    await page.wait_for_timeout(wait_ms)
-
-    target = page
-    if context is not None:
-        new_pages = [p for p in context.pages if p not in pages_before]
-        if new_pages:
-            target = new_pages[-1]
-            try:
-                await target.wait_for_load_state("domcontentloaded", timeout=5000)
-            except Exception:
-                pass
-
-    is_external = _is_external_domain(getattr(target, "url", "") or "", _SEEK_DOMAIN_SUFFIX)
-
-    if target is not page:
-        try:
-            await target.close()
-        except Exception:  # pragma: no cover - best-effort cleanup
-            pass
-
-    return is_external
-
-
 class SeekJobApplier:
     """Fills and submits a Seek job application. Mechanical only.
 
@@ -261,7 +194,9 @@ class SeekJobApplier:
                 return ApplyResult(
                     job_id=job_id, submitted=False, blocked_reason="unsupported_apply_flow"
                 )
-            if await _click_reveals_external_domain(page, external_locator):
+            if await _click_reveals_external_domain(
+                page, external_locator, _SEEK_DOMAIN_SUFFIX
+            ):
                 return ApplyResult(
                     job_id=job_id,
                     submitted=False,
@@ -278,7 +213,7 @@ class SeekJobApplier:
                 f"clicking the native Seek Quick Apply button failed: {exc}"
             ) from exc
 
-        form_root = await _wait_for_apply_form_root(page)
+        form_root = await _wait_for_apply_form_root(page, _APPLY_IFRAME_SELECTOR)
 
         if await _any_selector_present(form_root, _CAPTCHA_SELECTORS):
             return ApplyResult(job_id=job_id, submitted=False, blocked_reason="captcha_wall")

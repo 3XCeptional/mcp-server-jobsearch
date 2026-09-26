@@ -466,7 +466,9 @@ def test_external_apply_click_closes_the_orphaned_new_tab(html_page_runner):
             locator = page.locator('a:has-text("Apply on company site")')
             context = page.context
             pages_before = set(context.pages)
-            is_external = await apply_module._click_reveals_external_domain(page, locator)
+            is_external = await apply_module._click_reveals_external_domain(
+                page, locator, "indeed.com"
+            )
             leaked_pages = set(context.pages) - pages_before
             return is_external, leaked_pages
 
@@ -548,3 +550,35 @@ def test_duplicate_name_fields_are_disambiguated_not_collided(html_page_runner, 
     assert result.submitted is False
     assert result.blocked_reason == "unsupported_apply_flow"
     assert result.unanswered_fields == ("dept_2",)
+
+
+# ---------------------------------------------------------------------------
+# _ACCOUNT_LOGIN_SELECTORS' text-based selector is a shared constant driving
+# both Indeed's and Seek's login-wall detection (apply_common.py). Its regex
+# must keep matching Indeed's original wording and also match Seek's own
+# wording, or a Seek login wall worded that way (with no password input or
+# Google-sign-in button also present) would slip through undetected.
+# ---------------------------------------------------------------------------
+
+_SIGN_IN_TEXT_SELECTOR = apply_common_module._ACCOUNT_LOGIN_SELECTORS[-1]
+
+
+@pytest.mark.parametrize(
+    "wording",
+    [
+        "Sign in to your Indeed account",
+        "Sign in to your Seek account",
+        "Sign in to continue",
+    ],
+)
+def test_account_login_text_regex_matches_indeed_and_seek_wording(html_page_runner, wording):
+    html = f"<!DOCTYPE html><html><body><p>{wording}</p></body></html>"
+
+    async def _check(page: Any) -> bool:
+        return await apply_common_module._any_selector_present(
+            page, (_SIGN_IN_TEXT_SELECTOR,)
+        )
+
+    matched = html_page_runner(html, _check)
+
+    assert matched is True

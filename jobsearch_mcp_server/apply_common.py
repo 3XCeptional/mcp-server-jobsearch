@@ -16,10 +16,11 @@ CAPTCHA - those conditions are only ever detected and reported upward.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from jobsearch_mcp_server.contracts import ApplicantProfile, ExtractionError
+from jobsearch_mcp_server.navigation import PageNavigator
 
 # CAPTCHA/bot-check providers are cross-site by nature (reCAPTCHA, hCaptcha,
 # and Cloudflare Turnstile all get embedded verbatim regardless of which
@@ -33,6 +34,28 @@ _CAPTCHA_SELECTORS = (
     ".h-captcha",
     ".cf-turnstile",
     "#challenge-running",
+)
+
+# Any of these inside an apply form root means the site is demanding a fresh
+# account login before showing the application - a wall this tool must not
+# push through. Site-agnostic for the same reason `_CAPTCHA_SELECTORS` is:
+# a password input or a "Sign in with Google" button means the same thing
+# regardless of which job board is rendering it. Originally lived in
+# `apply.py` alone and was imported cross-module by `seek_apply.py`; moved
+# here to sit alongside `_CAPTCHA_SELECTORS`, the other genuinely shared
+# selector constant.
+#
+# The text-based selector's regex carries both sites' own wording ("sign in
+# to your indeed account" / "sign in to your seek account") rather than just
+# Indeed's original phrasing - the other selectors in this tuple (password
+# inputs, generic Google-sign-in buttons) already catch most real login
+# walls regardless of wording, but a Seek-worded wall with none of those
+# present would otherwise slip through undetected on this selector alone.
+_ACCOUNT_LOGIN_SELECTORS = (
+    'input[type="password"]',
+    'button:has-text("Sign in with Google")',
+    'button:has-text("Continue with Google")',
+    'text=/sign in to (your (indeed|seek) account|continue)/i',
 )
 
 # Attachment-upload safety limits: `resume_path`/`cover_letter_path` are
@@ -55,6 +78,30 @@ _SUCCESS_TEXT_MARKERS = (
     "you applied",
     "application sent",
 )
+
+
+def _resolve_page(navigator: PageNavigator, page_getter: Callable[[], Any] | None) -> Any:
+    """Fetch the live Playwright Page a navigator is driving.
+
+    Same reasoning as `job_pages._navigator_page`: `PageNavigator` documents
+    `goto()` but not a page accessor, so the public name is tried first (in
+    case a future revision adds one), then the private `_session` attribute
+    the current implementation actually uses, then a direct `.page`, then
+    finally the caller-supplied `page_getter` fallback. Site-agnostic:
+    Indeed's and Seek's appliers both drive a `PageNavigator` the same way.
+    """
+    for attr_path in ("session", "_session"):
+        session = getattr(navigator, attr_path, None)
+        if session is not None and hasattr(session, "page"):
+            return session.page
+    if hasattr(navigator, "page"):
+        return navigator.page
+    if page_getter is not None:
+        return page_getter()
+    raise AttributeError(
+        "PageNavigator instance exposes no reachable Playwright Page via "
+        "`.session.page`, `._session.page`, `.page`, or a supplied page_getter"
+    )
 
 
 async def _first_present(root: Any, selectors: tuple[str, ...]) -> Any | None:
@@ -159,6 +206,71 @@ def _is_external_domain(url: str, allowed_suffix: str) -> bool:
     """
     netloc = urlparse(url).netloc.lower()
     return not (netloc == allowed_suffix or netloc.endswith(f".{allowed_suffix}"))
+
+
+async def _wait_for_apply_form_root(page: Any, iframe_selector: str, timeout_ms: int = 10000) -> Any:
+    """Return the apply form's root: the modal iframe if one appears, else the page.
+
+    An apply flow commonly renders its form inside an iframe, but some
+    flows render inline on the main page - both are treated identically by
+    every selector-based helper above, since `Page` and Playwright's
+    `FrameLocator` both expose `.locator()`. `iframe_selector` is supplied
+    by the caller (e.g. Indeed's `iframe[id^="indeedapply-modal-iframe"]` or
+    Seek's own inferred equivalent) so this one function serves every
+    site's applier.
+    """
+    try:
+        await page.wait_for_selector(iframe_selector, timeout=timeout_ms)
+        return page.frame_locator(iframe_selector)
+    except Exception:
+        return page
+
+
+async def _click_reveals_external_domain(
+    page: Any, locator: Any, allowed_suffix: str, wait_ms: int = 1500
+) -> bool:
+    """Click an "apply on company site" control and check if it left the site's own domain.
+
+    Checks both a same-tab navigation and a newly opened tab/page, per the
+    two ways a job board is known to hand off to an external ATS. If the
+    click itself fails outright, the control's mere presence (labeled as an
+    external apply link) is treated as sufficient evidence on its own.
+
+    A newly opened off-domain tab is closed before returning: it was only
+    ever needed to inspect its URL, and leaving it open leaks a Playwright
+    Page for the lifetime of the shared browser context. `allowed_suffix` is
+    supplied by the caller (e.g. `"indeed.com"` or `"seek.com.au"`) and
+    passed straight through to `_is_external_domain`, so this one function
+    serves every site's applier.
+    """
+    context = getattr(page, "context", None)
+    pages_before = set(context.pages) if context is not None else set()
+    try:
+        await locator.click(timeout=5000)
+    except Exception:
+        return True
+
+    await page.wait_for_timeout(wait_ms)
+
+    target = page
+    if context is not None:
+        new_pages = [p for p in context.pages if p not in pages_before]
+        if new_pages:
+            target = new_pages[-1]
+            try:
+                await target.wait_for_load_state("domcontentloaded", timeout=5000)
+            except Exception:
+                pass
+
+    is_external = _is_external_domain(getattr(target, "url", "") or "", allowed_suffix)
+
+    if target is not page:
+        try:
+            await target.close()
+        except Exception:  # pragma: no cover - best-effort cleanup
+            pass
+
+    return is_external
 
 
 async def _any_frame_contains_success_text(page: Any) -> bool:

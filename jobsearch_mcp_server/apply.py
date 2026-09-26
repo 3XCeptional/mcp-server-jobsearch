@@ -21,14 +21,18 @@ from typing import Any, Callable
 
 from jobsearch_mcp_server import authentication
 from jobsearch_mcp_server.apply_common import (
+    _ACCOUNT_LOGIN_SELECTORS,
     _CAPTCHA_SELECTORS,
     _answer_screening_questions,
     _any_selector_present,
+    _click_reveals_external_domain,
     _fill_first,
     _first_present,
     _is_external_domain,
+    _resolve_page,
     _upload_first,
     _validate_attachment_path,
+    _wait_for_apply_form_root,
     _wait_for_submission_success,
 )
 from jobsearch_mcp_server.contracts import ApplicantProfile, ApplyResult, ExtractionError
@@ -62,16 +66,6 @@ _EXTERNAL_APPLY_SELECTORS = (
 # the main page instead.
 _APPLY_IFRAME_SELECTOR = 'iframe[id^="indeedapply-modal-iframe"]'
 
-# Any of these inside the apply form root means Indeed is demanding a fresh
-# account login before showing the application - a wall this tool must not
-# push through.
-_ACCOUNT_LOGIN_SELECTORS = (
-    'input[type="password"]',
-    'button:has-text("Sign in with Google")',
-    'button:has-text("Continue with Google")',
-    'text=/sign in to (your indeed account|continue)/i',
-)
-
 _NAME_INPUT_SELECTORS = ('input[name="applicant.name"]',)
 _EMAIL_INPUT_SELECTORS = ('input[name="applicant.email"]', 'input[type="email"]')
 _PHONE_INPUT_SELECTORS = ('input[name="applicant.phoneNumber"]', 'input[type="tel"]')
@@ -87,86 +81,6 @@ _SUBMIT_BUTTON_SELECTORS = (
 # excluded from the screening-question scan so they are never double-filled
 # or reported as an unanswered required field.
 _STANDARD_FIELD_NAMES = frozenset({"applicant.name", "applicant.email", "applicant.phoneNumber"})
-
-
-def _resolve_page(navigator: PageNavigator, page_getter: Callable[[], Any] | None) -> Any:
-    """Fetch the live Playwright Page a navigator is driving.
-
-    Same reasoning as `job_pages._navigator_page`: `PageNavigator` documents
-    `goto()` but not a page accessor, so the public name is tried first (in
-    case a future revision adds one), then the private `_session` attribute
-    the current implementation actually uses, then a direct `.page`, then
-    finally the caller-supplied `page_getter` fallback.
-    """
-    for attr_path in ("session", "_session"):
-        session = getattr(navigator, attr_path, None)
-        if session is not None and hasattr(session, "page"):
-            return session.page
-    if hasattr(navigator, "page"):
-        return navigator.page
-    if page_getter is not None:
-        return page_getter()
-    raise AttributeError(
-        "PageNavigator instance exposes no reachable Playwright Page via "
-        "`.session.page`, `._session.page`, `.page`, or a supplied page_getter"
-    )
-
-
-async def _wait_for_apply_form_root(page: Any, timeout_ms: int = 10000) -> Any:
-    """Return the apply form's root: the modal iframe if one appears, else the page.
-
-    Indeed Apply commonly renders inside an iframe, but some flows render
-    inline on the main page - both are treated identically by every
-    selector-based helper above, since `Page` and Playwright's
-    `FrameLocator` both expose `.locator()`.
-    """
-    try:
-        await page.wait_for_selector(_APPLY_IFRAME_SELECTOR, timeout=timeout_ms)
-        return page.frame_locator(_APPLY_IFRAME_SELECTOR)
-    except Exception:
-        return page
-
-
-async def _click_reveals_external_domain(page: Any, locator: Any, wait_ms: int = 1500) -> bool:
-    """Click an "apply on company site" control and check if it left indeed.com.
-
-    Checks both a same-tab navigation and a newly opened tab/page, per the
-    two ways Indeed is known to hand off to an external ATS. If the click
-    itself fails outright, the control's mere presence (labeled as an
-    external apply link) is treated as sufficient evidence on its own.
-
-    A newly opened off-domain tab is closed before returning: it was only
-    ever needed to inspect its URL, and leaving it open leaks a Playwright
-    Page for the lifetime of the shared browser context.
-    """
-    context = getattr(page, "context", None)
-    pages_before = set(context.pages) if context is not None else set()
-    try:
-        await locator.click(timeout=5000)
-    except Exception:
-        return True
-
-    await page.wait_for_timeout(wait_ms)
-
-    target = page
-    if context is not None:
-        new_pages = [p for p in context.pages if p not in pages_before]
-        if new_pages:
-            target = new_pages[-1]
-            try:
-                await target.wait_for_load_state("domcontentloaded", timeout=5000)
-            except Exception:
-                pass
-
-    is_external = _is_external_domain(getattr(target, "url", "") or "", "indeed.com")
-
-    if target is not page:
-        try:
-            await target.close()
-        except Exception:  # pragma: no cover - best-effort cleanup
-            pass
-
-    return is_external
 
 
 class JobApplier:
@@ -235,7 +149,7 @@ class JobApplier:
                 return ApplyResult(
                     job_id=job_id, submitted=False, blocked_reason="unsupported_apply_flow"
                 )
-            if await _click_reveals_external_domain(page, external_locator):
+            if await _click_reveals_external_domain(page, external_locator, "indeed.com"):
                 return ApplyResult(
                     job_id=job_id,
                     submitted=False,
@@ -252,7 +166,7 @@ class JobApplier:
                 f"clicking the native Indeed Apply button failed: {exc}"
             ) from exc
 
-        form_root = await _wait_for_apply_form_root(page)
+        form_root = await _wait_for_apply_form_root(page, _APPLY_IFRAME_SELECTOR)
 
         if await _any_selector_present(form_root, _CAPTCHA_SELECTORS):
             return ApplyResult(job_id=job_id, submitted=False, blocked_reason="captcha_wall")
