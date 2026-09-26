@@ -67,7 +67,6 @@ class ApplyResult:
     submitted: bool
     blocked_reason: str | None = None
     # one of: None (submitted), "captcha_wall", "account_creation_required",
-    # "external_ats_login_required", "already_applied", "listing_closed",
-    # "unsupported_apply_flow"
+    # "external_ats_login_required", "unsupported_apply_flow"
     screenshot_path: str | None = None
     unanswered_fields: tuple[str, ...] = ()

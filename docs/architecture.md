@@ -20,26 +20,34 @@ work (URL building, id parsing, text cleanup).
 | `cli_main.py` | `build_parser()`, `main()` | browser-free |
 | `contracts.py` | `JobSummary`, `JobDetail`, `ApplicantProfile`, `ApplyResult`, `ExtractionError` | browser-free |
 | `identifiers.py` | `normalize_job_id()`, `job_view_url()` | browser-free |
+| `seek_identifiers.py` | `normalize_seek_job_id()`, `seek_job_view_url()` | browser-free |
 | `search_urls.py` | `build_job_search_url()`, `JOB_TYPE_MAP`, `DATE_POSTED_MAP` | browser-free |
+| `seek_search_urls.py` | `build_seek_search_url()`, `WORK_TYPE_MAP`, `DATE_POSTED_MAP` | browser-free |
 | `job_policy.py` | `RESULTS_PER_PAGE`, `MAX_SEARCH_PAGES`, `next_start_offset()`, `pages_needed_for()` | browser-free |
 | `text.py` | `strip_indeed_noise()`, `filter_indeed_noise_lines()` | browser-free |
 | `jobs.py` | `JobScraper` | browser-free (orchestrates `JobPageReader`, never touches a `Page` directly) |
+| `seek_jobs.py` | `SeekJobScraper` | browser-free (orchestrates `SeekJobPageReader`, never touches a `Page` directly) |
 | `session.py` | `ScrapingSession` | page-owning (thin wrapper around a live `Page`) |
 | `browser_launch.py` | `launch_persistent_browser()` | page-owning (only module that imports `playwright.async_api` directly) |
 | `navigation.py` | `PageNavigator`, `WaitUntil` | page-owning |
 | `authentication.py` | `ensure_logged_in()` | page-owning (reads page state only, never fills credentials) |
 | `session_state.py` | `SessionManager` | page-owning (owns the process-lifetime session cache) |
 | `job_pages.py` | `JobPageReader`, `parse_job_detail_from_page()`, `parse_search_results_from_page()` | page-owning |
+| `seek_job_pages.py` | `SeekJobPageReader`, `parse_seek_job_detail_from_page()`, `parse_seek_search_results_from_page()` | page-owning |
+| `apply_common.py` | `_answer_screening_questions()`, `_validate_attachment_path()`, `_wait_for_submission_success()`, `_is_external_domain()`, and other locator/CAPTCHA/attachment helpers shared by `apply.py` and `seek_apply.py` | page-owning (its helpers take and call methods directly on a live `Page`/`Locator`/`FrameLocator`, even though the module itself never imports `playwright`) |
 | `apply.py` | `JobApplier` | page-owning |
-| `extractor.py` | `IndeedExtractor` | page-owning (facade; delegates all page access to its collaborators) |
-| `server.py` | `mcp`, `register_job_tools()`, `main()` | page-owning transitively (constructs `IndeedExtractor`, exposes it as 4 MCP tools) |
+| `seek_apply.py` | `SeekJobApplier` | page-owning |
+| `extractor.py` | `IndeedExtractor`, `SeekExtractor` | page-owning (facade; delegates all page access to its collaborators) |
+| `server.py` | `mcp`, `register_job_tools()`, `register_seek_job_tools()`, `main()` | page-owning transitively (constructs `IndeedExtractor` and `SeekExtractor`, exposes them as 8 MCP tools total) |
 
 ## Internal import graph
 
 ```
 contracts        -> (none)
 identifiers       -> (none)
+seek_identifiers     -> (none)
 search_urls        -> identifiers
+seek_search_urls     -> seek_identifiers
 job_policy        -> (none)
 text          -> (none)
 session         -> (none)
@@ -48,10 +56,14 @@ navigation        -> contracts, session
 authentication      -> navigation
 session_state      -> authentication, browser_launch, session
 job_pages         -> contracts, identifiers, navigation, text
+seek_job_pages      -> contracts, navigation, seek_identifiers
 jobs           -> contracts, job_pages, job_policy, navigation, search_urls
-apply          -> authentication, contracts, identifiers, navigation
-extractor         -> apply, contracts, job_pages, jobs, navigation, session_state
-server          -> contracts, extractor, identifiers, session_state
+seek_jobs         -> contracts, job_policy, navigation, seek_job_pages, seek_search_urls
+apply_common       -> contracts
+apply          -> apply_common, authentication, contracts, identifiers, navigation
+seek_apply        -> apply, apply_common, authentication, contracts, navigation, seek_identifiers
+extractor         -> apply, contracts, job_pages, jobs, navigation, seek_apply, seek_job_pages, seek_jobs, session_state
+server          -> contracts, extractor, identifiers, seek_identifiers, session_state
 cli_main         -> server (deferred import, inside main())
 __main__         -> cli_main
 ```
