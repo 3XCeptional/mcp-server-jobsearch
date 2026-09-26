@@ -29,6 +29,7 @@ EXPECTED_TOOL_NAMES = {
     "close_session",
     "seek_search_jobs",
     "seek_get_job_details",
+    "seek_apply_to_job",
     "seek_close_session",
 }
 
@@ -85,6 +86,15 @@ def test_seek_search_jobs_requires_keywords_only():
 def test_seek_get_job_details_requires_job_id():
     tool = next(t for t in _list_tools() if t.name == "seek_get_job_details")
     assert tool.input_schema["required"] == ["job_id"]
+
+
+def test_seek_apply_to_job_requires_the_mandatory_applicant_fields():
+    tool = next(t for t in _list_tools() if t.name == "seek_apply_to_job")
+    required = set(tool.input_schema["required"])
+    assert required == {"job_id", "full_name", "email", "phone", "resume_path"}
+    # Optional fields with real defaults must not be forced onto the caller.
+    optional_properties = set(tool.input_schema["properties"]) - required
+    assert optional_properties == {"location", "cover_letter_path", "screening_answers_json"}
 
 
 def test_tool_descriptions_are_non_empty():
@@ -239,6 +249,60 @@ class TestSeekJobIdNormalizedAtToolBoundary:
             )
         assert called is False
 
+    def test_seek_apply_to_job_normalizes_before_calling_extractor(self, monkeypatch):
+        received = {}
+
+        async def fake_apply_to_job(job_id, profile):
+            received["job_id"] = job_id
+            from jobsearch_mcp_server.contracts import ApplyResult
+
+            return ApplyResult(job_id=job_id, submitted=True)
+
+        monkeypatch.setattr(seek_extractor, "apply_to_job", fake_apply_to_job)
+
+        asyncio.run(
+            mcp.call_tool(
+                "seek_apply_to_job",
+                {
+                    "job_id": "https://www.seek.com.au/job/93326286",
+                    "full_name": "Test Candidate",
+                    "email": "test@example.com",
+                    "phone": "0400000000",
+                    "resume_path": "/tmp/resume.pdf",
+                },
+            )
+        )
+        assert received["job_id"] == "93326286"
+
+    def test_seek_apply_to_job_rejects_malformed_job_id_without_calling_extractor(
+        self, monkeypatch
+    ):
+        called = False
+
+        async def fake_apply_to_job(job_id, profile):
+            nonlocal called
+            called = True
+            from jobsearch_mcp_server.contracts import ApplyResult
+
+            return ApplyResult(job_id=job_id, submitted=True)
+
+        monkeypatch.setattr(seek_extractor, "apply_to_job", fake_apply_to_job)
+
+        with pytest.raises(Exception):
+            asyncio.run(
+                mcp.call_tool(
+                    "seek_apply_to_job",
+                    {
+                        "job_id": "../../etc/passwd",
+                        "full_name": "Test Candidate",
+                        "email": "test@example.com",
+                        "phone": "0400000000",
+                        "resume_path": "/tmp/resume.pdf",
+                    },
+                )
+            )
+        assert called is False
+
 
 class TestScreeningAnswersJsonTypeChecked:
     """apply_to_job must reject a screening_answers_json that decodes to
@@ -267,6 +331,35 @@ class TestScreeningAnswersJsonTypeChecked:
                     "apply_to_job",
                     {
                         "job_id": "abc123",
+                        "full_name": "Jamie Rivers",
+                        "email": "jamie@example.test",
+                        "phone": "0400000000",
+                        "resume_path": "/tmp/does-not-matter.pdf",
+                        "screening_answers_json": bad_json,
+                    },
+                )
+            )
+        assert called is False
+
+    @pytest.mark.parametrize("bad_json", ["42", "[1, 2, 3]", '"just a string"', "null"])
+    def test_seek_non_dict_screening_answers_json_raises_before_extractor_call(
+        self, monkeypatch, bad_json
+    ):
+        called = False
+
+        async def fake_apply_to_job(job_id, profile):
+            nonlocal called
+            called = True
+            return None
+
+        monkeypatch.setattr(seek_extractor, "apply_to_job", fake_apply_to_job)
+
+        with pytest.raises(Exception):
+            asyncio.run(
+                mcp.call_tool(
+                    "seek_apply_to_job",
+                    {
+                        "job_id": "93326286",
                         "full_name": "Jamie Rivers",
                         "email": "jamie@example.test",
                         "phone": "0400000000",

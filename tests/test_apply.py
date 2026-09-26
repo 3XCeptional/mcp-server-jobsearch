@@ -37,6 +37,7 @@ from typing import Any
 import pytest
 
 from jobsearch_mcp_server import apply as apply_module
+from jobsearch_mcp_server import apply_common as apply_common_module
 from jobsearch_mcp_server.apply import JobApplier
 from jobsearch_mcp_server.contracts import ExtractionError
 
@@ -180,7 +181,11 @@ def test_resume_path_that_does_not_exist_is_rejected(html_page_runner, make_appl
 
 
 def test_resume_path_over_size_cap_is_rejected(html_page_runner, make_applicant_profile, tmp_path, monkeypatch):
-    monkeypatch.setattr(apply_module, "_MAX_ATTACHMENT_BYTES", 10)
+    # `_MAX_ATTACHMENT_BYTES` now lives in `apply_common` (it's a
+    # site-agnostic limit shared with Seek's applier) - `_validate_attachment_path`
+    # reads it from that module's own globals, so the constant has to be
+    # patched there, not on `apply_module`.
+    monkeypatch.setattr(apply_common_module, "_MAX_ATTACHMENT_BYTES", 10)
     big_path = tmp_path / "resume.pdf"
     big_path.write_bytes(b"x" * 100)
     profile = make_applicant_profile(resume_path=str(big_path))
@@ -230,7 +235,9 @@ _CHECKBOX_RADIO_HTML = """
 def _run_answer_screening(html_page_runner, html: str, profile):
     def _run(page):
         async def _inner():
-            unanswered = await apply_module._answer_screening_questions(page, profile)
+            unanswered = await apply_module._answer_screening_questions(
+                page, profile, apply_module._STANDARD_FIELD_NAMES
+            )
             relocate_checked = await page.locator("#relocate").is_checked()
             morning_checked = await page.locator("#shift-morning").is_checked()
             evening_checked = await page.locator("#shift-evening").is_checked()
@@ -386,11 +393,11 @@ def test_external_apply_click_closes_the_orphaned_new_tab(html_page_runner):
 
 
 def test_is_external_domain_requires_a_dot_boundary():
-    assert apply_module._is_external_domain("https://notindeed.com/job") is True
-    assert apply_module._is_external_domain("https://evilindeed.com/job") is True
-    assert apply_module._is_external_domain("https://indeed.com/job") is False
-    assert apply_module._is_external_domain("https://au.indeed.com/job") is False
-    assert apply_module._is_external_domain("") is True
+    assert apply_module._is_external_domain("https://notindeed.com/job", "indeed.com") is True
+    assert apply_module._is_external_domain("https://evilindeed.com/job", "indeed.com") is True
+    assert apply_module._is_external_domain("https://indeed.com/job", "indeed.com") is False
+    assert apply_module._is_external_domain("https://au.indeed.com/job", "indeed.com") is False
+    assert apply_module._is_external_domain("", "indeed.com") is True
 
 
 # ---------------------------------------------------------------------------

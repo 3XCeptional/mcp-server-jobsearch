@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head><title>Security Analyst - Acme Corp | Seek</title></head>
+<body>
+  <h1>Security Analyst</h1>
+
+  <button data-automation="job-detail-apply" onclick="window.__openSeekApplyModal()">Quick apply</button>
+  <div id="seek-apply-modal-wrap" style="display:none"></div>
+
+  <script>
+    // Hand-built stand-in for Seek's own Quick Apply form: a dynamically
+    // created iframe (id prefix matches seek_apply._APPLY_IFRAME_SELECTOR)
+    // containing a normal, fully-answerable application form using Seek's
+    // inferred data-automation attribute convention. No network access, no
+    // real Seek backend - the submit handler below mutates the iframe's own
+    // document with the same success-text marker apply_common.py's real
+    // (unmodified) confirmation detection looks for, so that detection
+    // logic is exercised end to end against this fixture rather than
+    // stubbed out.
+    window.__openSeekApplyModal = function () {
+      var wrap = document.getElementById('seek-apply-modal-wrap');
+      wrap.style.display = 'block';
+
+      var iframe = document.createElement('iframe');
+      iframe.id = 'seek-apply-modal-iframe-1';
+      wrap.appendChild(iframe);
+
+      var doc = iframe.contentDocument;
+      doc.open();
+      doc.write(`
+        <html>
+          <body>
+            <form id="seek-apply-form">
+              <input type="text" data-automation="applicantName" placeholder="Full name" />
+              <input type="email" data-automation="applicantEmail" placeholder="Email" />
+              <input type="tel" data-automation="applicantPhone" placeholder="Phone" />
+              <input type="file" data-automation="resumeUpload" />
+              <input type="file" data-automation="coverLetterUpload" />
+
+              <label for="hear-about-us">How did you hear about us?</label>
+              <select id="hear-about-us" aria-label="How did you hear about us?" required>
+                <option value="">Select one</option>
+                <option>LinkedIn</option>
+                <option>Seek</option>
+                <option>Referral</option>
+              </select>
+
+              <label for="notice-period">Notice period (weeks)</label>
+              <input id="notice-period" type="text" aria-label="Notice period (weeks)" required />
+
+              <button type="submit" id="submit-application">Submit application</button>
+            </form>
+            <script>
+              document.getElementById('seek-apply-form').addEventListener('submit', function (event) {
+                event.preventDefault();
+                document.body.innerHTML = '<div id="confirmation">Your application has been submitted.</div>';
+              });
+            <\/script>
+          </body>
+        </html>
+      `);
+      doc.close();
+    };
+  </script>
+</body>
+</html>

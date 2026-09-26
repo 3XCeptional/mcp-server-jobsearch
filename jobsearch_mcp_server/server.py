@@ -127,10 +127,7 @@ def register_job_tools(mcp: FastMCP, extractor: IndeedExtractor) -> None:
 
 
 def register_seek_job_tools(mcp: FastMCP, seek_extractor: SeekExtractor) -> None:
-    """Register the Seek job tools on `mcp`, delegating to `seek_extractor`.
-
-    `seek_apply_to_job` is a later leaf's concern, not this one.
-    """
+    """Register the Seek job tools on `mcp`, delegating to `seek_extractor`."""
 
     @mcp.tool(name="seek_search_jobs")
     async def seek_search_jobs(
@@ -160,6 +157,50 @@ def register_seek_job_tools(mcp: FastMCP, seek_extractor: SeekExtractor) -> None
         """Fetch full detail (description, salary, job type) for one Seek job id."""
         job_id = normalize_seek_job_id(job_id)
         return await seek_extractor.get_job_details(job_id)
+
+    @mcp.tool(name="seek_apply_to_job")
+    async def seek_apply_to_job(
+        job_id: str,
+        full_name: str,
+        email: str,
+        phone: str,
+        resume_path: str,
+        location: str = "Sydney, NSW",
+        cover_letter_path: str = "",
+        screening_answers_json: str = "{}",
+    ) -> dict:
+        """Apply to a Seek job, filling only the fields given here.
+
+        Mechanical only: this tool never decides whether the candidate
+        should apply, never fact-checks, and never invents a field value -
+        the calling agent owns that judgment and supplies every fact via
+        these parameters. It never creates an account, never bypasses a
+        CAPTCHA, and stops (reporting `blocked_reason`) rather than
+        guessing at anything it isn't given.
+
+        `screening_answers_json` is a JSON object string mapping a
+        screening question's field label/name to its answer, since MCP
+        tool parameters must be flat JSON-primitive types rather than a
+        nested dict.
+        """
+        job_id = normalize_seek_job_id(job_id)
+        screening_answers = json.loads(screening_answers_json) if screening_answers_json else {}
+        if not isinstance(screening_answers, dict):
+            raise ValueError(
+                "screening_answers_json must decode to a JSON object (dict), got "
+                f"{type(screening_answers).__name__}"
+            )
+        profile = ApplicantProfile(
+            full_name=full_name,
+            email=email,
+            phone=phone,
+            resume_path=resume_path,
+            location=location,
+            cover_letter_path=cover_letter_path or None,
+            screening_answers=screening_answers or None,
+        )
+        result = await seek_extractor.apply_to_job(job_id, profile)
+        return dataclasses.asdict(result)
 
     @mcp.tool(name="seek_close_session")
     async def seek_close_session() -> str:

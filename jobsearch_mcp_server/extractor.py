@@ -16,6 +16,7 @@ from jobsearch_mcp_server.contracts import ApplicantProfile, ApplyResult, JobSum
 from jobsearch_mcp_server.job_pages import JobPageReader
 from jobsearch_mcp_server.jobs import JobScraper
 from jobsearch_mcp_server.navigation import PageNavigator
+from jobsearch_mcp_server.seek_apply import SeekJobApplier
 from jobsearch_mcp_server.seek_job_pages import SeekJobPageReader
 from jobsearch_mcp_server.seek_jobs import SeekJobScraper
 from jobsearch_mcp_server.session_state import SessionManager
@@ -75,11 +76,10 @@ class IndeedExtractor:
 
 
 class SeekExtractor:
-    """High-level, session-managed facade over Seek job search/detail.
+    """High-level, session-managed facade over Seek job search/detail/apply.
 
-    Mirrors `IndeedExtractor`'s exact structure. Deliberately has no
-    `apply_to_job`/`close_session` split from Indeed's own - the
-    `SessionManager` instance handed in at construction is Seek's own
+    Mirrors `IndeedExtractor`'s exact structure, including `apply_to_job`.
+    The `SessionManager` instance handed in at construction is Seek's own
     (a separate browser profile from Indeed's, wired up in `server.py`), so
     this class owns no browser state itself here either.
     """
@@ -114,6 +114,21 @@ class SeekExtractor:
         scraper = await self._build_scraper()
         detail = await scraper.get_job_details(job_id)
         return asdict(detail)
+
+    async def apply_to_job(self, job_id: str, profile: ApplicantProfile) -> ApplyResult:
+        """Apply to a job through Seek, filling only what `profile` supplies.
+
+        Mechanical only: never decides whether the candidate should apply,
+        never fact-checks, never invents a field value. Mirrors
+        `IndeedExtractor.apply_to_job` exactly - see `seek_apply.SeekJobApplier`
+        for the full walk-through and its hard-stop behaviour (CAPTCHA
+        walls, account-creation walls, external ATS handoffs, unanswerable
+        required fields).
+        """
+        session = await self._session_manager.get_or_create_session()
+        navigator = PageNavigator(session)
+        applier = SeekJobApplier(navigator)
+        return await applier.apply_to_job(job_id, profile)
 
     async def close_session(self) -> None:
         """Close the underlying browser session, if one is open."""
