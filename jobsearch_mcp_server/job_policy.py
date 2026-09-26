@@ -21,11 +21,6 @@ from __future__ import annotations
 # codebase - Indeed has changed this before and may change it again.
 RESULTS_PER_PAGE = 15
 
-# The path segment for Indeed's job search page, used when building/
-# recognizing search URLs (paired with the `/jobs` host route that
-# `search_urls.build_job_search_url` targets).
-JOB_SEARCH_PATH = "/jobs"
-
 # A hard ceiling on how many pages a single `search_jobs` call will walk,
 # independent of `max_results`. This exists purely to stop a pathological
 # `max_results` value (or a site change that stops returning 0 to signal
@@ -45,19 +40,3 @@ def next_start_offset(current_start: int, results_per_page: int = RESULTS_PER_PA
     if results_per_page <= 0:
         raise ValueError("results_per_page must be positive")
     return current_start + results_per_page
-
-
-def pages_needed_for(max_results: int, results_per_page: int = RESULTS_PER_PAGE) -> int:
-    """Estimate how many pages of `results_per_page` are needed for `max_results`.
-
-    This is an upper bound used for planning/looping, not a guarantee - a
-    real page can return fewer results than `results_per_page` (end of
-    results, filtered-out listings), which callers must still detect and
-    stop on independently rather than trusting this count alone.
-    """
-    if max_results <= 0:
-        raise ValueError("max_results must be positive")
-    if results_per_page <= 0:
-        raise ValueError("results_per_page must be positive")
-    full_pages, remainder = divmod(max_results, results_per_page)
-    return full_pages + (1 if remainder else 0)
