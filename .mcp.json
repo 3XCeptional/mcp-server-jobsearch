@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "jobsearch-mcp-server": {
-      "command": "/Users/dhiren/Projects/mcp-server-indeed/.venv/bin/python3",
-      "args": ["-m", "jobsearch_mcp_server"],
-      "type": "stdio"
-    }
-  }
-}

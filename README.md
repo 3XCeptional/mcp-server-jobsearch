@@ -1,5 +1,7 @@
 # jobsearch-mcp-server
 
+![Tests](https://github.com/3xceptional/mcp-server-jobsearch/actions/workflows/test.yml/badge.svg)
+
 MCP server that gives AI assistants like Claude access to Indeed and Seek
 job search, job postings, and job applications through the user's own local
 browser session. Built with Playwright, modeled on the `mcp-server-linkedin`
@@ -43,9 +45,24 @@ Or, once installed, via the console script:
 jobsearch-mcp-server
 ```
 
-To register it with Claude Code, add a `.mcp.json` (see the one committed in
-this repo) pointing `command` at this project's `.venv/bin/python3` with
-`args: ["-m", "jobsearch_mcp_server"]`.
+To register it with Claude Code, add a `.mcp.json` in the project directory
+you want it available in:
+
+```json
+{
+  "mcpServers": {
+    "jobsearch-mcp-server": {
+      "command": "/absolute/path/to/mcp-server-jobsearch/.venv/bin/python3",
+      "args": ["-m", "jobsearch_mcp_server"],
+      "type": "stdio"
+    }
+  }
+}
+```
+
+Replace `/absolute/path/to/mcp-server-jobsearch` with wherever you cloned
+this repo. `.mcp.json` is gitignored here since the path is machine-specific
+by nature.
 
 ## Tools
 
@@ -184,6 +201,29 @@ Indeed or Seek automation tool. Specifically, and without overselling it:
   attempting) any handoff to a third-party ATS via an "Apply on company
   site" link, reporting `blocked_reason="external_ats_login_required"` in
   that case.
+
+## Security considerations
+
+This tool assumes a trusted, single-operator caller (an agent you run
+yourself, on your own behalf), not a shared or multi-tenant deployment.
+Two consequences worth knowing before you wire it into an agent:
+
+- **Scraped job postings are untrusted, attacker-postable content.**
+  `search_jobs`/`get_job_details` (and their Seek equivalents) return the
+  raw text of a real job listing, with no semantic filtering beyond basic
+  noise stripping. Anyone can post a job on Indeed or Seek, so a listing's
+  text could contain a prompt-injection attempt aimed at whatever LLM
+  consumes this server's output. This server does not and cannot defend
+  against that: it returns what the page says. Do not let an agent take
+  an irreversible action (submitting an application, sending a message)
+  based purely on scraped text without a human or a separate gate in the
+  loop.
+- **`apply_to_job`/`seek_apply_to_job` submit real applications to real
+  employers, with no built-in rate limit or per-session cap.** A
+  misconfigured or looping caller can submit far faster than a human
+  would, which has real-world consequences beyond this process's own
+  resource usage. Add your own throttling or a confirmation step at the
+  calling-agent level if that caller isn't fully trusted.
 
 ## Development
 

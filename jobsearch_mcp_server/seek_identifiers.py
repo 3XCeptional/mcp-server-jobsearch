@@ -12,7 +12,7 @@ import re
 from urllib.parse import urlparse
 
 # Seek job ids are purely numeric, stricter than Indeed's alphanumeric `jk`
-# ids (confirmed from real URLs already in applications.db, e.g.
+# ids (confirmed from real Seek job URLs, e.g.
 # https://www.seek.com.au/job/93326286).
 _SEEK_ID_RE = re.compile(r"^[0-9]+$")
 
